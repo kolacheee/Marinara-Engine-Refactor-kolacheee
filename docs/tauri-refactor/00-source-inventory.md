@@ -116,7 +116,8 @@ Status: Complete.
 - Moved original `components/panels/SettingsPanel.tsx` into `src/features/settings/components/SettingsPanel.tsx` with layout and markup preserved.
 - Moved original `components/panels/settings/SettingControls.tsx` into `src/features/settings/components/settings/SettingControls.tsx`.
 - Moved original shared UI primitives used by settings, `components/ui/HelpTooltip.tsx`, `DraftNumberInput.tsx`, and `ExportFormatDialog.tsx`, into `src/shared/components/ui`.
-- Mapped server-backed settings dependencies to Phase 2-safe placeholders: themes/extensions query hooks, admin/server API client, chat metadata/data-clearing hooks, game asset rescanning, character embedded-lorebook inspection, browser refresh, and notification sound helper.
+- Reopened the settings slice during cleanup and replaced the reduced `SettingsPanel` with the moved original `components/panels/SettingsPanel.tsx`, including tracker-panel appearance controls, custom font/background UI, import/export flows, advanced/admin controls, and the original synced-theme hook contract.
+- Moved original settings support that the panel expects, including `components/panels/settings/TTSConfigCard.tsx` and the original `hooks/use-themes.ts`; backend/file actions intentionally route through unavailable API seams.
 - Wired the existing right panel settings route to render the migrated `SettingsPanel`.
 - Deferred real persistence, imports, backups, updates, background/font file operations, extension execution, and destructive data actions until their owning Rust backend slices.
 
@@ -127,8 +128,7 @@ Status: Complete.
 - Mapped theme and appearance preferences from original `components/panels/SettingsPanel.tsx` to the migrated settings feature, preserving the Appearance and Themes tab UI.
 - Mapped original theme preference state from `stores/ui.store.ts` to `src/shared/stores/ui.store.ts`, including color scheme, visual theme, font sizing, conversation gradient, text appearance, avatar style, and local custom theme fields.
 - Wired app-level preference effects in `src/app/App.tsx` and `src/app/providers/CustomThemeInjector.tsx` so color scheme, visual theme, font size, font family, and active custom CSS apply to the document shell.
-- Reworked `src/features/settings/hooks/use-themes.ts` to use the existing persisted UI store for local custom theme create, edit, import, activate, export, and delete behavior instead of the temporary query-cache placeholder.
-- Deferred Rust-backed theme storage/sync, custom font folder operations, Google Fonts download, background file operations, and chat metadata persistence until their owning backend/file slices.
+- Replaced the earlier local-theme implementation with the moved original synced-theme hook contract. Rust-backed theme storage/sync, custom font folder operations, Google Fonts download, background file operations, and chat metadata persistence are deferred through failing API/file seams.
 
 ### Phase 2 Slice 3 Character/Persona Library Read Surfaces
 
@@ -168,10 +168,10 @@ Status: Complete, reworked from simplified surface to moved original UI tree.
 
 Status: Complete, reworked from simplified editor shells to moved original UI.
 
-- Mapped original `components/panels/LorebooksPanel.tsx` into `src/features/lorebooks/components/LorebooksPanel.tsx`, preserving the right-panel library controls, search, category filters, sorting, selection mode, row actions, and click-to-edit path.
+- Replaced the reduced lorebook list panel with moved original `components/panels/LorebooksPanel.tsx`, preserving active-chat filtering, tag controls, bulk export/delete flows, character/persona labels, selection mode, row actions, and click-to-edit path.
 - Replaced the simplified `LorebookEditor` with moved original `components/lorebooks/LorebookEditor.tsx`, plus `LorebookEntryRow.tsx`, `LorebookFolderRow.tsx`, and `LorebookFormFields.tsx`.
 - Replaced the simplified lorebook hook contract with moved original `hooks/use-lorebooks.ts`; its API calls intentionally hit the unavailable backend seam instead of fake storage.
-- Mapped original `components/panels/PresetsPanel.tsx` into `src/features/presets/components/PresetsPanel.tsx`, preserving the right-panel library controls, search, selection mode, default/duplicate/delete row actions, assignment click path, and click-to-edit path.
+- Replaced the reduced preset list panel with moved original `components/panels/PresetsPanel.tsx`, preserving assignment behavior, choice selection modal path, bulk export/delete, selection mode, default/duplicate/delete row actions, and click-to-edit path.
 - Replaced the simplified `PresetEditor` with moved original `components/presets/PresetEditor.tsx`, plus `ChoiceSelectionModal.tsx`.
 - Replaced the simplified preset hook contract with moved original `hooks/use-presets.ts`; its API calls intentionally hit the unavailable backend seam instead of fake storage.
 - Wired the right panel `lorebooks` and `presets` routes and center shell detail rendering for `lorebookDetailId` and `presetDetailId`.
@@ -181,12 +181,12 @@ Status: Complete, reworked from simplified editor shells to moved original UI.
 
 Status: Complete.
 
-- Moved original `components/panels/ConnectionsPanel.tsx` read-list behavior into `src/features/connections/components/ConnectionsPanel.tsx` and wired the right-panel `connections` route to render it.
-- Mapped original `hooks/use-connections.ts` to `src/features/connections/hooks/use-connections.ts`, preserving list/detail/mutation hook contracts for downstream feature slices.
+- Replaced the reduced connections read surface with moved original `components/panels/ConnectionsPanel.tsx`, including folders/reorder UI, local model card, TTS config card, agent assignment controls, active/random connection controls, and row actions.
+- Mapped original `hooks/use-connections.ts` and `hooks/use-connection-folders.ts` to `src/features/connections/hooks`, preserving list/detail/folder/mutation hook contracts for downstream backend slices.
 - Added frontend-owned Phase 2 connection DTOs in `src/features/connections/types.ts` until Rust-owned DTO bindings replace them.
 - Added a feature-owned API seam in `src/features/connections/api/connections-api.ts`; it intentionally fails with explicit Rust connections backend errors instead of fake connection data or fake persistence.
 - Wired connection row clicks to the existing center-shell detail placeholder so the navigation path is accounted for without moving the full editor.
-- Deferred `components/connections/ConnectionEditor.tsx`, `components/modals/CreateConnectionModal.tsx`, local sidecar controls, TTS settings card, provider tests, model discovery, secret persistence, image test generation, chat settings integration, and active connection persistence until their owning frontend and Rust backend slices.
+- Deferred `components/connections/ConnectionEditor.tsx`, `components/modals/CreateConnectionModal.tsx`, provider tests, model discovery, secret persistence, image test generation, and active connection persistence until their owning frontend and Rust backend slices. UI controls now exist where they were part of the moved original panel, but backend/file/model actions still fail through unavailable seams.
 
 ### Phase 2 Slice 8 Roleplay/Conversation UI
 
@@ -200,7 +200,7 @@ Status: Complete, reworked from partial recreation to moved original roleplay UI
 
 ### Phase 2 Slice 9 Game UI
 
-Status: Partial, reworked from simplified shell to moved original UI tree.
+Status: Complete, reworked from simplified shell to moved original UI tree.
 
 - Removed the simplified game DTO/API files `src/features/game/types.ts` and `src/features/game/api/game-api.ts`; the migrated game feature now uses the moved original contracts/hooks instead of the temporary simplified shell.
 - Moved original `components/game/AnimatedText.tsx`, `DirectionEngine.tsx`, `DraggablePanel.tsx`, `game-asset-generation-payload.ts`, `GameCharacterSheet.tsx`, `GameCheckpoints.tsx`, `GameChoiceCards.tsx`, `GameCombatUI.tsx`, `GameDialogueOverlay.tsx`, `GameDiceResult.tsx`, `GameElementReaction.tsx`, `GameGridMap.tsx`, `GameImagePromptReviewModal.tsx`, `GameInput.tsx`, `GameInventory.tsx`, `GameJournal.tsx`, `GameJsonRepairModal.tsx`, `GameMap.tsx`, `GameNarration.tsx`, `GameNodeMap.tsx`, `GameNpcTracker.tsx`, `GamePartyBar.tsx`, `GamePartySidebar.tsx`, `GameQteOverlay.tsx`, `GameReadableDisplay.tsx`, `GameSessionBanner.tsx`, `GameSessionHistory.tsx`, `GameSetupWizard.tsx`, `GameSkillCheckResult.tsx`, `GameStateIndicator.tsx`, `GameSurface.tsx`, `GameTransitionManager.tsx`, `GameTravelView.tsx`, `GameTutorial.tsx`, and `GameWidgetPanel.tsx` into `src/features/game/components`.
@@ -218,6 +218,6 @@ Status: Partial, reworked from simplified shell to moved original UI tree.
 Status: Complete for the known simplified Phase 2 UI targets.
 
 - Reworked Phase 2 Slice 9 first because it had the clearest simplified replacement and the original game UI tree could be moved as a coherent component graph.
-- Reworked Phase 2 Slices 5, 6, and 8 by replacing simplified chat/conversation, lorebook/preset editor, and roleplay surfaces with moved original UI code and matching original hook/store contracts where needed for compilation.
-- Added only compile/deferred seams for later backend or future frontend ownership: generation, scene analysis, scene actions, autonomous messaging, agents, encounter, haptics, custom tools, translation, TTS, gallery/file storage, exports/imports, and API calls remain unavailable or inert.
+- Reworked Phase 2 Slices 1, 5, 6, 7, and 8 by replacing simplified or reduced settings, chat/conversation, lorebook/preset panels and editors, connections panel, and roleplay surfaces with moved original UI code and matching original hook/store contracts where needed for compilation.
+- Added only compile/deferred seams for later backend or future frontend ownership: generation, scene analysis, scene actions, autonomous messaging, agents, encounter, haptics, custom tools, translation, TTS, gallery/file storage, sidecar/model operations, exports/imports, and API calls remain unavailable or inert.
 - Do not continue to agents/tools UI until this cleanup is reviewed.

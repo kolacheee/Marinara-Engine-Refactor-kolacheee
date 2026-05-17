@@ -1,27 +1,39 @@
-import { useMemo, useState } from "react";
+// ──────────────────────────────────────────────
+// Panel: Lorebooks (overhauled)
+// Category tabs, search, click-to-edit, AI generate
+// ──────────────────────────────────────────────
+import { useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  ArrowUpDown,
-  BookOpen,
-  Check,
-  Download,
-  FileText,
-  Globe,
-  Layers,
   Plus,
-  Search,
+  Download,
+  Check,
   Sparkles,
-  Trash2,
-  UserRound,
+  BookOpen,
+  Search,
+  Globe,
   Users,
+  UserRound,
+  Layers,
+  ArrowUpDown,
+  Tag,
+  ChevronDown,
+  ChevronUp,
+  X,
   Wand2,
+  Trash2,
   Zap,
 } from "lucide-react";
 import { useUIStore } from "../../../shared/stores/ui.store";
+import { useChatStore } from "../../../shared/stores/chat.store";
+import { useLorebooks, useDeleteLorebook, useUpdateLorebook } from "../hooks/use-lorebooks";
+import { useCharacters, usePersonas } from "../../characters/hooks/use-characters";
+import type { Lorebook, LorebookCategory } from "@marinara-engine/shared";
 import { showConfirmDialog } from "../../../shared/lib/app-dialogs";
 import { cn } from "../../../shared/lib/utils";
-import { useDeleteLorebook, useLorebooks } from "../hooks/use-lorebooks";
-import type { Lorebook, LorebookCategory } from "../types";
+import { api } from "../../../shared/lib/api-client";
+import { getChatCharacterIds } from "../../../shared/lib/chat-macros";
+import { ExportFormatDialog, type ExportFormatChoice } from "../../../shared/components/ui/ExportFormatDialog";
 
 const CATEGORIES: Array<{ id: LorebookCategory | "all" | "active"; label: string; icon: typeof Globe }> = [
   { id: "all", label: "All", icon: Layers },
@@ -42,51 +54,184 @@ const CATEGORY_COLORS: Record<string, string> = {
   all: "from-amber-400 to-orange-500",
 };
 
-function parseTags(lorebook: Lorebook): string[] {
-  if (Array.isArray(lorebook.tags)) return lorebook.tags;
-  if (typeof lorebook.tags !== "string") return [];
-  try {
-    const parsed = JSON.parse(lorebook.tags);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-}
-
-function deferredToast(action: string) {
-  toast.error(`${action} is waiting for the Rust lorebooks backend slice.`);
-}
-
 export function LorebooksPanel() {
   const [activeCategory, setActiveCategory] = useState<LorebookCategory | "all" | "active">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<"name-asc" | "name-desc" | "newest" | "oldest" | "tokens">("name-asc");
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedLorebookIds, setSelectedLorebookIds] = useState<Set<string>>(new Set());
-  const openLorebookDetail = useUIStore((s) => s.openLorebookDetail);
-  const { data: lorebooks, isLoading, error } = useLorebooks(
-    activeCategory === "all" || activeCategory === "active" ? undefined : activeCategory,
-  );
-  const deleteLorebook = useDeleteLorebook();
+  const [exportingSelected, setExportingSelected] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
-  const filtered = useMemo(() => {
-    let list = lorebooks ?? [];
-    if (activeCategory === "active") {
-      list = list.filter((lorebook) => lorebook.enabled && lorebook.isGlobal);
+  // Active chat context for the "Active" filter
+  const activeChat = useChatStore((s) => s.activeChat);
+  const activeChatMetadata = activeChat?.metadata;
+  const activeLorebookIds: string[] = useMemo(() => {
+    if (!activeChatMetadata) return [];
+    try {
+      const meta = typeof activeChatMetadata === "string" ? JSON.parse(activeChatMetadata) : activeChatMetadata;
+      return Array.isArray(meta.activeLorebookIds) ? meta.activeLorebookIds : [];
+    } catch {
+      return [];
     }
-    if (!searchQuery.trim()) return list;
-    const query = searchQuery.toLowerCase();
+  }, [activeChatMetadata]);
+  const activeCharacterIds = useMemo(() => getChatCharacterIds(activeChat), [activeChat]);
+  const activePersonaId = activeChat?.personaId ?? null;
+  const activeChatId = activeChat?.id ?? null;
+
+  // When "active" category is selected, fetch all lorebooks (no category filter) — we filter client-side
+  const { data: lorebooks, isLoading } = useLorebooks(
+    activeCategory === "active" || activeCategory === "all" ? undefined : activeCategory,
+  );
+  const { data: rawCharacters } = useCharacters();
+  const { data: rawPersonas } = usePersonas();
+  const deleteLorebook = useDeleteLorebook();
+  const updateLorebook = useUpdateLorebook();
+  const openModal = useUIStore((s) => s.openModal);
+  const openLorebookDetail = useUIStore((s) => s.openLorebookDetail);
+
+  const characterNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!rawCharacters) return map;
+    for (const c of rawCharacters as Array<{ id: string; data: string | Record<string, unknown> }>) {
+      try {
+        const d = typeof c.data === "string" ? JSON.parse(c.data) : c.data;
+        map.set(c.id, d?.name ?? "Unknown");
+      } catch {
+        map.set(c.id, "Unknown");
+      }
+    }
+    return map;
+  }, [rawCharacters]);
+  const personaNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!rawPersonas) return map;
+    for (const p of rawPersonas as Array<{ id: string; name: string; comment?: string | null }>) {
+      map.set(p.id, p.comment ? `${p.name} - ${p.comment}` : p.name || "Unknown");
+    }
+    return map;
+  }, [rawPersonas]);
+  const getCharacterNames = useCallback(
+    (lb: Lorebook) => {
+      const ids =
+        Array.isArray(lb.characterIds) && lb.characterIds.length > 0
+          ? lb.characterIds
+          : lb.characterId
+            ? [lb.characterId]
+            : [];
+      return ids.map((id) => characterNameById.get(id) ?? id);
+    },
+    [characterNameById],
+  );
+  const getPersonaNames = useCallback(
+    (lb: Lorebook) => {
+      const ids =
+        Array.isArray(lb.personaIds) && lb.personaIds.length > 0 ? lb.personaIds : lb.personaId ? [lb.personaId] : [];
+      return ids.map((id) => personaNameById.get(id) ?? id);
+    },
+    [personaNameById],
+  );
+
+  const parseTags = (lb: Lorebook): string[] => {
+    const raw = lb.tags;
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === "string")
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return [];
+      }
+    return [];
+  };
+
+  const allTags = useMemo(() => {
+    if (!lorebooks) return [] as string[];
+    const tagSet = new Set<string>();
+    for (const lb of lorebooks as Lorebook[]) {
+      for (const t of parseTags(lb)) tagSet.add(t);
+    }
+    return Array.from(tagSet).sort();
+  }, [lorebooks]);
+
+  const handleDeleteTag = useCallback(
+    async (tag: string) => {
+      if (
+        !(await showConfirmDialog({
+          title: "Remove Tag",
+          message: `Remove tag "${tag}" from all lorebooks?`,
+          confirmLabel: "Remove",
+          tone: "destructive",
+        }))
+      ) {
+        return;
+      }
+      try {
+        if (!lorebooks) return;
+        const affected = (lorebooks as Lorebook[]).filter((lb) => parseTags(lb).includes(tag));
+        for (const lb of affected) {
+          const newTags = parseTags(lb).filter((t) => t !== tag);
+          await updateLorebook.mutateAsync({ id: lb.id, tags: newTags });
+        }
+        if (activeTag === tag) setActiveTag(null);
+      } catch {
+        toast.error("Failed to remove tag from some lorebooks");
+      }
+    },
+    [lorebooks, updateLorebook, activeTag],
+  );
+
+  // Filter by search
+  const filtered = useMemo(() => {
+    if (!lorebooks) return [];
+    let list = lorebooks as Lorebook[];
+    // "Active" filter: show lorebooks active in the current chat
+    // Mirrors server-side filterRelevantLorebooks: global + pinned + character-linked + persona-linked + chat-scoped
+    if (activeCategory === "active") {
+      list = list.filter(
+        (lb) =>
+          lb.enabled &&
+          (lb.isGlobal ||
+            activeLorebookIds.includes(lb.id) ||
+            (Array.isArray(lb.characterIds) && lb.characterIds.some((id) => activeCharacterIds.includes(id))) ||
+            (lb.characterId && activeCharacterIds.includes(lb.characterId)) ||
+            (Array.isArray(lb.personaIds) && lb.personaIds.includes(activePersonaId ?? "")) ||
+            (lb.personaId && lb.personaId === activePersonaId) ||
+            (lb.chatId && lb.chatId === activeChatId)),
+      );
+    }
+    if (activeTag) {
+      list = list.filter((lb) => parseTags(lb).includes(activeTag));
+    }
+    if (!searchQuery) return list;
+    const q = searchQuery.toLowerCase();
     return list.filter(
-      (lorebook) =>
-        lorebook.name.toLowerCase().includes(query) ||
-        lorebook.description.toLowerCase().includes(query) ||
-        parseTags(lorebook).some((tag) => tag.toLowerCase().includes(query)),
+      (lb: Lorebook) =>
+        lb.name.toLowerCase().includes(q) ||
+        lb.description.toLowerCase().includes(q) ||
+        getCharacterNames(lb).some((name) => name.toLowerCase().includes(q)) ||
+        getPersonaNames(lb).some((name) => name.toLowerCase().includes(q)) ||
+        parseTags(lb).some((t) => t.toLowerCase().includes(q)),
     );
-  }, [activeCategory, lorebooks, searchQuery]);
+  }, [
+    lorebooks,
+    activeCategory,
+    activeLorebookIds,
+    activeCharacterIds,
+    activePersonaId,
+    activeChatId,
+    searchQuery,
+    activeTag,
+    getCharacterNames,
+    getPersonaNames,
+  ]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
     switch (sort) {
+      case "name-asc":
+        return list.sort((a, b) => a.name.localeCompare(b.name));
       case "name-desc":
         return list.sort((a, b) => b.name.localeCompare(a.name));
       case "newest":
@@ -95,75 +240,121 @@ export function LorebooksPanel() {
         return list.sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
       case "tokens":
         return list.sort((a, b) => (b.tokenBudget ?? 0) - (a.tokenBudget ?? 0));
-      case "name-asc":
       default:
-        return list.sort((a, b) => a.name.localeCompare(b.name));
+        return list;
     }
   }, [filtered, sort]);
 
+  // Group by category for "all" view
   const grouped = useMemo(() => {
     if (activeCategory !== "all") return null;
     const map = new Map<string, Lorebook[]>();
-    for (const lorebook of sorted) {
-      const group = lorebook.category || "uncategorized";
-      map.set(group, [...(map.get(group) ?? []), lorebook]);
+    for (const lb of sorted) {
+      const cat = lb.category || "uncategorized";
+      const list = map.get(cat) ?? [];
+      list.push(lb);
+      map.set(cat, list);
     }
     return map;
-  }, [activeCategory, sorted]);
+  }, [sorted, activeCategory]);
 
-  const toggleSelection = (id: string) => {
-    setSelectedLorebookIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const exitSelectionMode = () => {
+  const exitSelectionMode = useCallback(() => {
     setSelectionMode(false);
     setSelectedLorebookIds(new Set());
-  };
+  }, []);
 
-  const handleDelete = async (lorebook: Lorebook) => {
+  const toggleSelection = useCallback((lorebookId: string) => {
+    setSelectedLorebookIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(lorebookId)) next.delete(lorebookId);
+      else next.add(lorebookId);
+      return next;
+    });
+  }, []);
+
+  const handleExportSelected = useCallback(
+    async (format: ExportFormatChoice) => {
+      if (selectedLorebookIds.size === 0) return;
+      setExportingSelected(true);
+      setExportDialogOpen(false);
+      try {
+        await api.downloadPost(
+          "/lorebooks/export-bulk",
+          { ids: [...selectedLorebookIds], format },
+          format === "compatible" ? "compatible-lorebooks.zip" : "marinara-lorebooks.zip",
+        );
+        toast.success(`Exported ${selectedLorebookIds.size} lorebook${selectedLorebookIds.size === 1 ? "" : "s"}`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to export lorebooks");
+      } finally {
+        setExportingSelected(false);
+      }
+    },
+    [selectedLorebookIds],
+  );
+
+  const handleDeleteSelected = useCallback(async () => {
+    const ids = [...selectedLorebookIds];
+    if (ids.length === 0) return;
+
     if (
-      await showConfirmDialog({
-        title: "Delete Lorebook",
-        message: `Delete "${lorebook.name}"? All entries will be lost.`,
+      !(await showConfirmDialog({
+        title: "Delete Lorebooks",
+        message: `Delete ${ids.length} lorebook${ids.length === 1 ? "" : "s"}? All entries inside them will be lost.`,
         confirmLabel: "Delete",
         tone: "destructive",
-      })
+      }))
     ) {
-      deleteLorebook.mutate(lorebook.id);
+      return;
     }
-  };
+
+    const results = await Promise.allSettled(ids.map((id) => deleteLorebook.mutateAsync(id)));
+    const failedIds = ids.filter((_, index) => results[index]?.status === "rejected");
+    const deletedCount = ids.length - failedIds.length;
+
+    if (deletedCount > 0) {
+      toast.success(`Deleted ${deletedCount} lorebook${deletedCount === 1 ? "" : "s"}`);
+    }
+
+    if (failedIds.length > 0) {
+      setSelectedLorebookIds(new Set(failedIds));
+      toast.error(`Failed to delete ${failedIds.length} lorebook${failedIds.length === 1 ? "" : "s"}`);
+      return;
+    }
+
+    exitSelectionMode();
+  }, [selectedLorebookIds, deleteLorebook, exitSelectionMode]);
 
   return (
-    <div className="flex h-full flex-col gap-2 overflow-y-auto p-3">
+    <div className="flex flex-col gap-2 p-3">
+      {/* Action buttons */}
       <div className="flex gap-2">
         <button
-          onClick={() => deferredToast("Create lorebook")}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 px-3 py-2.5 text-xs font-medium text-white shadow-md shadow-amber-400/15 transition-all hover:shadow-lg active:scale-[0.98]"
+          onClick={() => openModal("create-lorebook")}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 px-3 py-2.5 text-xs font-medium text-white shadow-md shadow-amber-400/15 transition-all hover:shadow-lg hover:shadow-amber-400/25 active:scale-[0.98]"
           title="New"
         >
           <Plus size="0.8125rem" /> <span className="md:hidden">New</span>
         </button>
         <button
-          onClick={() => deferredToast("Import lorebook")}
+          onClick={() => openModal("import-lorebook")}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-xs font-medium text-[var(--secondary-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] active:scale-[0.98]"
           title="Import"
         >
           <Download size="0.8125rem" /> <span className="md:hidden">Import</span>
         </button>
         <button
-          onClick={() => deferredToast("AI lorebook maker")}
+          onClick={() => openModal("lorebook-maker")}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-xs font-medium text-[var(--secondary-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] active:scale-[0.98]"
           title="AI Maker"
         >
           <Sparkles size="0.8125rem" /> <span className="md:hidden">Maker</span>
         </button>
         <button
-          onClick={() => (selectionMode ? exitSelectionMode() : setSelectionMode(true))}
+          onClick={() => {
+            if (selectionMode) exitSelectionMode();
+            else setSelectionMode(true);
+          }}
           className={cn(
             "flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-medium transition-all",
             selectionMode
@@ -182,19 +373,34 @@ export function LorebooksPanel() {
             {selectedLorebookIds.size} selected
           </span>
           <button
-            onClick={() => setSelectedLorebookIds(new Set(sorted.map((lorebook) => lorebook.id)))}
+            onClick={() => setSelectedLorebookIds(new Set(sorted.map((lb) => lb.id)))}
             disabled={sorted.length === 0}
             className="rounded-lg px-2.5 py-1 text-[0.625rem] font-medium text-amber-400 transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
           >
             Select visible
           </button>
           <button
-            onClick={() => deferredToast("Bulk lorebook export")}
+            onClick={() => setSelectedLorebookIds(new Set())}
             disabled={selectedLorebookIds.size === 0}
+            className="rounded-lg px-2.5 py-1 text-[0.625rem] font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-40"
+          >
+            Clear
+          </button>
+          <button
+            onClick={handleDeleteSelected}
+            disabled={selectedLorebookIds.size === 0}
+            className="inline-flex items-center gap-1 rounded-lg bg-[var(--destructive)]/12 px-2.5 py-1 text-[0.625rem] font-medium text-[var(--destructive)] transition-all hover:bg-[var(--destructive)]/20 disabled:opacity-40"
+          >
+            <Trash2 size="0.6875rem" />
+            Delete
+          </button>
+          <button
+            onClick={() => setExportDialogOpen(true)}
+            disabled={selectedLorebookIds.size === 0 || exportingSelected}
             className="inline-flex items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1 text-[0.625rem] font-medium text-white transition-all hover:opacity-90 disabled:opacity-40"
           >
             <Download size="0.6875rem" />
-            Export ZIP
+            {exportingSelected ? "Exporting..." : "Export ZIP"}
           </button>
           <button
             onClick={exitSelectionMode}
@@ -205,6 +411,15 @@ export function LorebooksPanel() {
         </div>
       )}
 
+      <ExportFormatDialog
+        open={exportDialogOpen}
+        title="Export Lorebooks"
+        description="Native keeps Marinara folders and entry fields. Compatible exports a folderless World Info JSON for other roleplay tools."
+        onClose={() => setExportDialogOpen(false)}
+        onSelect={handleExportSelected}
+      />
+
+      {/* Search + Sort */}
       <div className="flex gap-1.5">
         <div className="relative flex-1">
           <Search
@@ -215,14 +430,14 @@ export function LorebooksPanel() {
             type="text"
             placeholder="Search lorebooks"
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-xl bg-[var(--secondary)] py-2 pl-8 pr-3 text-xs text-[var(--foreground)] ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
           />
         </div>
         <div className="relative">
           <select
             value={sort}
-            onChange={(event) => setSort(event.target.value as typeof sort)}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
             className="h-full appearance-none rounded-xl border border-[var(--border)] bg-[var(--secondary)] py-2 pl-2.5 pr-7 text-[0.6875rem] outline-none transition-colors focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
             title="Sort order"
           >
@@ -239,14 +454,15 @@ export function LorebooksPanel() {
         </div>
       </div>
 
+      {/* Category tabs */}
       <div className="flex flex-wrap gap-1">
-        {CATEGORIES.map((category) => {
-          const Icon = category.icon;
-          const isActive = activeCategory === category.id;
+        {CATEGORIES.map((cat) => {
+          const Icon = cat.icon;
+          const isActive = activeCategory === cat.id;
           return (
             <button
-              key={category.id}
-              onClick={() => setActiveCategory(category.id)}
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
               className={cn(
                 "flex items-center gap-1 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[0.6875rem] font-medium transition-all",
                 isActive
@@ -255,30 +471,80 @@ export function LorebooksPanel() {
               )}
             >
               <Icon size="0.75rem" />
-              {category.label}
+              {cat.label}
             </button>
           );
         })}
       </div>
 
+      {/* Tag filter */}
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            onClick={() => setTagsExpanded(!tagsExpanded)}
+            className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-[0.625rem] text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+            title={tagsExpanded ? "Collapse tags" : "Expand tags"}
+          >
+            <Tag size="0.6875rem" />
+            {tagsExpanded ? <ChevronUp size="0.625rem" /> : <ChevronDown size="0.625rem" />}
+          </button>
+          {(tagsExpanded ? allTags : allTags.slice(0, 5)).map((tag) => (
+            <div
+              key={tag}
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setActiveTag(activeTag === tag ? null : tag);
+                }
+              }}
+              className={cn(
+                "group/tag flex items-center gap-1 rounded-lg px-2 py-1 text-[0.625rem] font-medium transition-all cursor-pointer",
+                activeTag === tag
+                  ? "bg-amber-400/15 text-amber-400 ring-1 ring-amber-400/30"
+                  : "bg-[var(--secondary)] text-[var(--muted-foreground)] ring-1 ring-[var(--border)] hover:text-[var(--foreground)]",
+              )}
+            >
+              {tag}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteTag(tag);
+                }}
+                className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-[var(--destructive)]/20 hover:text-[var(--destructive)]"
+                title={`Delete tag "${tag}"`}
+              >
+                <X size="0.5rem" />
+              </button>
+            </div>
+          ))}
+          {!tagsExpanded && allTags.length > 5 && (
+            <button
+              onClick={() => setTagsExpanded(true)}
+              className="rounded-lg px-2 py-1 text-[0.625rem] text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+            >
+              +{allTags.length - 5} more
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Loading */}
       {isLoading && (
         <div className="flex flex-col gap-2 py-2">
-          {[1, 2, 3].map((item) => (
-            <div key={item} className="shimmer h-14 rounded-xl" />
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="shimmer h-14 rounded-xl" />
           ))}
         </div>
       )}
 
-      {error && (
-        <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-300">
-          Lorebook storage and listing are waiting for the Rust lorebooks backend slice. The panel controls and editor
-          navigation are wired, but no fake lorebooks are shown.
-        </div>
-      )}
-
-      {!isLoading && !error && sorted.length === 0 && (
+      {/* Empty state */}
+      {!isLoading && sorted.length === 0 && (
         <div className="flex flex-col items-center gap-2 py-8 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400/20 to-orange-500/20">
+          <div className="animate-float flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400/20 to-orange-500/20">
             <BookOpen size="1.25rem" className="text-amber-400" />
           </div>
           <p className="text-xs text-[var(--muted-foreground)]">
@@ -287,44 +553,85 @@ export function LorebooksPanel() {
         </div>
       )}
 
-      {!isLoading && !error && sorted.length > 0 && (
-        <div className="flex flex-col gap-1">
+      {/* Lorebook list */}
+      {!isLoading && sorted.length > 0 && (
+        <div className="stagger-children flex flex-col gap-1">
           {activeCategory === "all" && grouped
-            ? Array.from(grouped.entries()).map(([category, books]) => {
-                const meta = CATEGORIES.find((item) => item.id === category) ?? CATEGORIES[6];
-                const Icon = meta.icon;
+            ? // Grouped view
+              Array.from(grouped.entries()).map(([category, books]) => {
+                const catMeta = CATEGORIES.find((c) => c.id === category) ?? CATEGORIES[5];
+                const CatIcon = catMeta.icon;
                 return (
                   <div key={category} className="mb-2">
                     <div className="mb-1 flex items-center gap-1.5 px-1 text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                      <Icon size="0.6875rem" />
-                      {meta.label}
+                      <CatIcon size="0.6875rem" />
+                      {catMeta.label}
                       <span className="ml-auto text-[0.625rem] font-normal">{books.length}</span>
                     </div>
-                    {books.map((lorebook) => (
-                      <LorebookRow
-                        key={lorebook.id}
-                        lorebook={lorebook}
-                        selectionMode={selectionMode}
-                        isSelected={selectedLorebookIds.has(lorebook.id)}
-                        onClick={() => (selectionMode ? toggleSelection(lorebook.id) : openLorebookDetail(lorebook.id))}
-                        onToggleSelect={() => toggleSelection(lorebook.id)}
-                        onDelete={() => handleDelete(lorebook)}
-                      />
-                    ))}
+                    {books.map((lb) => {
+                      const combinedNames = [...getCharacterNames(lb), ...getPersonaNames(lb)].join(", ") || undefined;
+                      return (
+                        <LorebookRow
+                          key={lb.id}
+                          lorebook={lb}
+                          characterName={combinedNames}
+                          personaName={undefined}
+                          onClick={() => {
+                            if (selectionMode) toggleSelection(lb.id);
+                            else openLorebookDetail(lb.id);
+                          }}
+                          onDelete={async () => {
+                            if (
+                              await showConfirmDialog({
+                                title: "Delete Lorebook",
+                                message: `Delete "${lb.name}"? All entries will be lost.`,
+                                confirmLabel: "Delete",
+                                tone: "destructive",
+                              })
+                            ) {
+                              deleteLorebook.mutate(lb.id);
+                            }
+                          }}
+                          selectionMode={selectionMode}
+                          isSelected={selectedLorebookIds.has(lb.id)}
+                          onToggleSelect={() => toggleSelection(lb.id)}
+                        />
+                      );
+                    })}
                   </div>
                 );
               })
-            : sorted.map((lorebook) => (
-                <LorebookRow
-                  key={lorebook.id}
-                  lorebook={lorebook}
-                  selectionMode={selectionMode}
-                  isSelected={selectedLorebookIds.has(lorebook.id)}
-                  onClick={() => (selectionMode ? toggleSelection(lorebook.id) : openLorebookDetail(lorebook.id))}
-                  onToggleSelect={() => toggleSelection(lorebook.id)}
-                  onDelete={() => handleDelete(lorebook)}
-                />
-              ))}
+            : // Flat view
+              sorted.map((lb: Lorebook) => {
+                const combinedNames = [...getCharacterNames(lb), ...getPersonaNames(lb)].join(", ") || undefined;
+                return (
+                  <LorebookRow
+                    key={lb.id}
+                    lorebook={lb}
+                    characterName={combinedNames}
+                    personaName={undefined}
+                    onClick={() => {
+                      if (selectionMode) toggleSelection(lb.id);
+                      else openLorebookDetail(lb.id);
+                    }}
+                    onDelete={async () => {
+                      if (
+                        await showConfirmDialog({
+                          title: "Delete Lorebook",
+                          message: `Delete "${lb.name}"? All entries will be lost.`,
+                          confirmLabel: "Delete",
+                          tone: "destructive",
+                        })
+                      ) {
+                        deleteLorebook.mutate(lb.id);
+                      }
+                    }}
+                    selectionMode={selectionMode}
+                    isSelected={selectedLorebookIds.has(lb.id)}
+                    onToggleSelect={() => toggleSelection(lb.id)}
+                  />
+                );
+              })}
         </div>
       )}
     </div>
@@ -333,36 +640,40 @@ export function LorebooksPanel() {
 
 function LorebookRow({
   lorebook,
+  characterName,
+  personaName,
+  onClick,
+  onDelete,
   selectionMode,
   isSelected,
-  onClick,
   onToggleSelect,
-  onDelete,
 }: {
   lorebook: Lorebook;
-  selectionMode: boolean;
-  isSelected: boolean;
+  characterName?: string;
+  personaName?: string;
   onClick: () => void;
-  onToggleSelect: () => void;
   onDelete: () => void;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const gradient = CATEGORY_COLORS[lorebook.category] ?? CATEGORY_COLORS.uncategorized;
-  const CategoryIcon = CATEGORIES.find((category) => category.id === lorebook.category)?.icon ?? FileText;
+  const CatIcon = CATEGORIES.find((c) => c.id === lorebook.category)?.icon ?? BookOpen;
 
   return (
     <div
       className={cn(
         "group relative flex cursor-pointer items-center gap-3 rounded-xl p-2.5 transition-all hover:bg-[var(--sidebar-accent)]",
-        selectionMode && isSelected && "bg-amber-400/10 ring-1 ring-amber-400/40",
+        selectionMode && isSelected && "ring-1 ring-amber-400/40 bg-amber-400/10",
       )}
       onClick={onClick}
     >
       {selectionMode && (
         <button
           type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleSelect();
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect?.();
           }}
           className={cn(
             "flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors",
@@ -372,11 +683,16 @@ function LorebookRow({
           )}
           aria-label={isSelected ? "Deselect lorebook" : "Select lorebook"}
         >
-          <Check size="0.75rem" />
+          <span className="text-[0.75rem]">✓</span>
         </button>
       )}
-      <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br text-white", gradient)}>
-        <CategoryIcon size="1rem" />
+      <div
+        className={cn(
+          "flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm",
+          gradient,
+        )}
+      >
+        <CatIcon size="1rem" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -388,20 +704,30 @@ function LorebookRow({
           )}
         </div>
         <div className="truncate text-[0.6875rem] text-[var(--muted-foreground)]">
-          {lorebook.description || "No description"}
+          {characterName || personaName ? (
+            <span className="inline-flex items-center gap-1">
+              <UserRound size="0.625rem" className="shrink-0" />
+              {characterName ?? personaName}
+              {lorebook.description ? ` · ${lorebook.description}` : ""}
+            </span>
+          ) : (
+            lorebook.description || "No description"
+          )}
         </div>
       </div>
       {!selectionMode && (
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete();
-          }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-[var(--sidebar)] p-1.5 opacity-0 shadow-sm ring-1 ring-[var(--border)] transition-all hover:bg-[var(--destructive)]/15 group-hover:opacity-100 max-md:opacity-100"
-          title="Delete"
-        >
-          <Trash2 size="0.75rem" className="text-[var(--destructive)]" />
-        </button>
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex shrink-0 items-center gap-0.5 rounded-lg bg-[var(--sidebar)] px-1 py-0.5 opacity-0 shadow-sm ring-1 ring-[var(--border)] transition-opacity group-hover:opacity-100 max-md:opacity-100">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="rounded-lg p-1.5 transition-all hover:bg-[var(--destructive)]/15 active:scale-90"
+            title="Delete"
+          >
+            <Trash2 size="0.75rem" className="text-[var(--destructive)]" />
+          </button>
+        </div>
       )}
     </div>
   );

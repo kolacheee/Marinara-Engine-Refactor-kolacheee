@@ -13,7 +13,7 @@ import {
   useUpdateCharacter,
   useDuplicateCharacter,
 } from "../hooks/use-characters";
-import { useUpdateChat, useCreateMessage, chatKeys } from "../../../shared/hooks/use-chats";
+import { useUpdateChat, useCreateMessage, chatKeys } from "../../chats/hooks/use-chats";
 import { useStartChatFromCharacter } from "../hooks/use-start-chat-from-character";
 import { api } from "../api/characters-api";
 import { showConfirmDialog } from "../../../shared/lib/app-dialogs";

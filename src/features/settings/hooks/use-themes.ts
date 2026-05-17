@@ -1,77 +1,131 @@
-import { useMutation } from "@tanstack/react-query";
-import type { Theme } from "../types";
-import { useUIStore, type CustomTheme } from "../../../shared/stores/ui.store";
+// ──────────────────────────────────────────────
+// Hooks: Synced Custom Themes
+// ──────────────────────────────────────────────
+import { useEffect, useRef } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "../../../shared/lib/api-client";
+import { useUIStore } from "../../../shared/stores/ui.store";
+import type { CreateThemeInput, Theme, UpdateThemeInput } from "@marinara-engine/shared";
 
-function toTheme(theme: CustomTheme, activeThemeId: string | null): Theme {
-  return {
-    id: theme.id,
-    name: theme.name,
-    css: theme.css,
-    installedAt: theme.installedAt,
-    isActive: theme.id === activeThemeId,
-  };
+export const themeKeys = {
+  all: ["themes"] as const,
+  list: () => [...themeKeys.all, "list"] as const,
+};
+
+export function findDuplicateTheme(themes: Theme[], name: string, css: string) {
+  return themes.find((theme) => theme.name === name && theme.css === css) ?? null;
 }
 
 export function useThemes() {
-  const themes = useUIStore((s) => s.customThemes);
-  const activeThemeId = useUIStore((s) => s.activeCustomTheme);
-
-  return {
-    data: themes.map((theme) => toTheme(theme, activeThemeId)),
-    isLoading: false,
-  };
+  return useQuery({
+    queryKey: themeKeys.list(),
+    queryFn: () => api.get<Theme[]>("/themes"),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: () => (document.hidden ? false : 15_000),
+  });
 }
 
 export function useCreateTheme() {
-  const addCustomTheme = useUIStore((s) => s.addCustomTheme);
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (theme: Omit<Theme, "id">) => {
-      const created: CustomTheme = {
-        id: crypto.randomUUID(),
-        name: theme.name,
-        css: theme.css,
-        installedAt: theme.installedAt ?? new Date().toISOString(),
-      };
-      addCustomTheme(created);
-      return toTheme(created, null);
+    mutationFn: (data: CreateThemeInput) => api.post<Theme>("/themes", data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: themeKeys.all });
     },
   });
 }
 
 export function useUpdateTheme() {
-  const updateCustomTheme = useUIStore((s) => s.updateCustomTheme);
-  const activeThemeId = useUIStore((s) => s.activeCustomTheme);
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (theme: { id: string; name: string; css: string }) => {
-      updateCustomTheme(theme.id, { name: theme.name, css: theme.css });
-      return { ...theme, isActive: theme.id === activeThemeId };
+    mutationFn: ({ id, ...data }: { id: string } & UpdateThemeInput) => api.patch<Theme>(`/themes/${id}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: themeKeys.all });
     },
   });
 }
 
 export function useDeleteTheme() {
-  const removeCustomTheme = useUIStore((s) => s.removeCustomTheme);
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      removeCustomTheme(id);
+    mutationFn: (id: string) => api.delete(`/themes/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: themeKeys.all });
     },
   });
 }
 
 export function useSetActiveTheme() {
-  const setActiveCustomTheme = useUIStore((s) => s.setActiveCustomTheme);
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string | null) => {
-      setActiveCustomTheme(id);
+    mutationFn: (id: string | null) => api.put<Theme | null>("/themes/active", { id }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: themeKeys.all });
     },
   });
 }
 
-export function findDuplicateTheme(themes: Theme[], name: string, css: string) {
-  const normalizedName = name.trim().toLowerCase();
-  const normalizedCss = css.trim();
-  return (
-    themes.find((theme) => theme.name.trim().toLowerCase() === normalizedName && theme.css.trim() === normalizedCss) ??
-    null
-  );
+export function useLegacyThemeMigration() {
+  const legacyThemes = useUIStore((s) => s.customThemes);
+  const legacyActiveCustomTheme = useUIStore((s) => s.activeCustomTheme);
+  const hasMigratedCustomThemesToServer = useUIStore((s) => s.hasMigratedCustomThemesToServer);
+  const clearLegacyCustomThemes = useUIStore((s) => s.clearLegacyCustomThemes);
+  const setHasMigratedCustomThemesToServer = useUIStore((s) => s.setHasMigratedCustomThemesToServer);
+  const qc = useQueryClient();
+  const inFlightRef = useRef(false);
+  const { isSuccess } = useThemes();
+
+  useEffect(() => {
+    if (hasMigratedCustomThemesToServer || !isSuccess || inFlightRef.current) {
+      return;
+    }
+
+    inFlightRef.current = true;
+    void (async () => {
+      try {
+        const latestThemes = await api.get<Theme[]>("/themes");
+        const serverAlreadyHasActiveTheme = latestThemes.some((theme) => theme.isActive);
+        let workingThemes = [...latestThemes];
+        let migratedActiveThemeId: string | null = null;
+
+        for (const legacyTheme of legacyThemes) {
+          let syncedTheme = findDuplicateTheme(workingThemes, legacyTheme.name, legacyTheme.css);
+          if (!syncedTheme) {
+            syncedTheme = await api.post<Theme>("/themes", {
+              name: legacyTheme.name,
+              css: legacyTheme.css,
+              installedAt: legacyTheme.installedAt,
+            });
+            workingThemes = [syncedTheme, ...workingThemes];
+          }
+
+          if (!serverAlreadyHasActiveTheme && legacyActiveCustomTheme === legacyTheme.id) {
+            migratedActiveThemeId = syncedTheme.id;
+          }
+        }
+
+        if (migratedActiveThemeId) {
+          await api.put<Theme | null>("/themes/active", { id: migratedActiveThemeId });
+        }
+
+        clearLegacyCustomThemes();
+        setHasMigratedCustomThemesToServer(true);
+        await qc.invalidateQueries({ queryKey: themeKeys.all });
+      } catch {
+        // Leave migration flag untouched so the next app start can retry.
+      } finally {
+        inFlightRef.current = false;
+      }
+    })();
+  }, [
+    clearLegacyCustomThemes,
+    hasMigratedCustomThemesToServer,
+    isSuccess,
+    legacyActiveCustomTheme,
+    legacyThemes,
+    qc,
+    setHasMigratedCustomThemesToServer,
+  ]);
 }

@@ -61,7 +61,7 @@ Move copied UI in this order, one small reviewed surface at a time:
 
 ### Phase 2 Rework Checkpoint
 
-Status: Complete for the known simplified Phase 2 UI targets. Game UI, chat/conversation, lorebook/preset editors, and roleplay surfaces have been reworked from simplified replacements into moved original UI trees with backend-dependent behavior routed to unavailable seams.
+Status: Complete for the known simplified Phase 2 UI targets. Settings, chat/conversation, lorebook/preset panels and editors, connections, roleplay, and game surfaces have been reworked from simplified or reduced replacements into moved original UI trees with backend-dependent behavior routed to unavailable seams.
 
 The first pass through Phase 2 drifted from the project rule to "move and lightly reorganize the existing React UI." Several slices introduced simplified replacement surfaces instead of moving the original component files and preserving their UI structure with backend-dependent behavior explicitly deferred.
 
@@ -83,8 +83,10 @@ The next slice must be a cleanup/rework slice, not a new feature slice. Its goal
 
 Known rework targets from the audit:
 
+- Phase 2 Slice 1 settings was reopened and replaced with moved original `components/panels/SettingsPanel.tsx`, original theme hook contracts, and original TTS config UI support where the moved panels require it.
 - Phase 2 Slice 4/5 chat surfaces were reopened and replaced with moved original `components/chat` UI and original chat hook/store contracts where needed for compilation.
-- Phase 2 Slice 6 editors were reopened and replaced with moved original `components/lorebooks` and `components/presets` editor trees and original lorebook/preset hook contracts.
+- Phase 2 Slice 6 panels and editors were reopened and replaced with moved original `components/panels/LorebooksPanel.tsx`, `components/panels/PresetsPanel.tsx`, `components/lorebooks`, and `components/presets` trees plus original lorebook/preset hook contracts.
+- Phase 2 Slice 7 connections was reopened and replaced with moved original `components/panels/ConnectionsPanel.tsx` plus original connection-folder hook contracts and panel support UI.
 - Phase 2 Slice 8 roleplay/conversation UI was reopened and replaced with moved original `ChatRoleplaySurface`, roleplay HUD/panels, scene, sprite, encounter, and related chat support UI.
 - Phase 2 Slice 9 Game UI was reopened and replaced with the moved original `components/game` tree plus required support files. Remaining work is backend wiring and later-slice behavior, not a simplified UI replacement.
 - Phase 1/2 shared utility seams that intentionally became unavailable placeholders should remain placeholders only when the original behavior belongs to Rust or a later backend/file slice.

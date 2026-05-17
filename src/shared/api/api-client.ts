@@ -14,6 +14,10 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
+
+  get payload() {
+    return this.details;
+  }
 }
 
 async function unavailable(): Promise<never> {
