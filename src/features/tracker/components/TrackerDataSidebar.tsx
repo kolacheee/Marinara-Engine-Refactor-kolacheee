@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Sparkles } from "lucide-react";
-import {
-  type InventoryItem,
-  type Persona,
-  type PresentCharacter,
-  type QuestProgress,
-} from "@marinara-engine/shared";
+import type { InventoryItem, PresentCharacter, QuestProgress } from "../../../engine/contracts/types/game-state";
+import type { Persona } from "../../../engine/contracts/types/persona";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useGameStateStore } from "../../world-state/stores/world-state.store";

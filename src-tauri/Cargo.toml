@@ -10,23 +10,12 @@ edition = "2021"
 [workspace]
 resolver = "2"
 members = [
-  "crates/agents",
   "crates/assets",
-  "crates/chat",
-  "crates/conversation",
   "crates/core",
-  "crates/game",
-  "crates/generation",
-  "crates/import",
   "crates/integrations",
   "crates/llm",
-  "crates/roleplay",
   "crates/security",
-  "crates/sidecar",
   "crates/storage",
-  "crates/sync-client",
-  "crates/sync-protocol",
-  "crates/updates",
 ]
 
 [workspace.metadata.marinara.bindings]
@@ -64,7 +53,5 @@ marinara-core = { path = "crates/core" }
 marinara-security = { path = "crates/security" }
 marinara-storage = { path = "crates/storage" }
 marinara-assets = { path = "crates/assets" }
-marinara-import = { path = "crates/import" }
 marinara-integrations = { path = "crates/integrations" }
 marinara-llm = { path = "crates/llm" }
-marinara-updates = { path = "crates/updates" }

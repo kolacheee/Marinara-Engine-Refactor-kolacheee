@@ -1,4 +1,4 @@
-import type { CharacterData } from "@marinara-engine/shared";
+import type { CharacterData } from "../../contracts/types/character";
 
 type DescriptionExtension = {
   active?: unknown;

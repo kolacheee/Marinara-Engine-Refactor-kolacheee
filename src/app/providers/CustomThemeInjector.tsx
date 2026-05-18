@@ -163,24 +163,18 @@ export function CustomThemeInjector() {
             return el;
           },
 
-          // Fetch from Marinara API
-          // Deny extensions from calling sensitive endpoints. Without this,
-          // a malicious extension could `apiFetch("/extensions", { method: "POST", ... })`
-          // to re-install itself after the user deletes it, or hit `/admin/*`
-          // privileged routes. The denylist runs on the *canonical* pathname
-          // produced by the WHATWG URL parser, so `%2e%2e/admin` and other
-          // dot-segment / encoded-traversal payloads can't sneak past.
-          apiFetch: async (path: string, options?: RequestInit) => {
+          // Call native Marinara routes while denying sensitive extension/admin paths.
+          request: async (path: string, options?: RequestInit) => {
             const normalized = path.startsWith("/") ? path : `/${path}`;
-            const url = new URL(`/api${normalized}`, window.location.origin);
-            const apiPath = url.pathname.replace(/^\/api(?=\/|$)/, "");
+            const url = new URL(normalized, window.location.origin);
+            const apiPath = url.pathname;
             const denied =
               apiPath === "/extensions" ||
               apiPath.startsWith("/extensions/") ||
               apiPath === "/admin" ||
               apiPath.startsWith("/admin/");
             if (denied) {
-              const message = `apiFetch denied: extensions cannot reach ${apiPath}`;
+              const message = `request denied: extensions cannot reach ${apiPath}`;
               console.warn(`[Extension:${ext.name}] ${message}`);
               return Promise.reject(new Error(message));
             }

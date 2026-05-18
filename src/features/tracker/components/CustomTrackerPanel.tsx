@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
-import type { CustomTrackerField } from "@marinara-engine/shared";
+import type { CustomTrackerField } from "../../../engine/contracts/types/game-state";
 import { cn } from "../../../shared/lib/utils";
 import { visibleText } from "./tracker-data-sidebar.helpers";
 import {

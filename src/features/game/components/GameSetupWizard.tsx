@@ -20,7 +20,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import type { GameSetupConfig, GameGmMode } from "@marinara-engine/shared";
+import type { GameSetupConfig, GameGmMode } from "../../../engine/contracts/types/game";
 import { getCharacterTitle } from "../../../shared/lib/character-display";
 import { api } from "../../../shared/api/api-client";
 import { cn, getAvatarCropStyle, parseAvatarCropJson, type AvatarCropValue } from "../../../shared/lib/utils";

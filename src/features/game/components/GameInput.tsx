@@ -9,7 +9,7 @@ import { SpeechToTextButton } from "../../../shared/components/ui/SpeechToTextBu
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { translateDraftText } from "../../../shared/lib/draft-translation";
-import type { DiceRollResult } from "@marinara-engine/shared";
+import type { DiceRollResult } from "../../../engine/contracts/types/game";
 
 interface Attachment {
   type: string;

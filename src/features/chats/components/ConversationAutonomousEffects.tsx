@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import type { Message } from "@marinara-engine/shared";
+import type { Message } from "../../../engine/contracts/types/chat";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { playNotificationPing } from "../../../shared/lib/notification-sound";

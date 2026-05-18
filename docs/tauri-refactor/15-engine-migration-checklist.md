@@ -17,8 +17,8 @@ Last updated: 2026-05-18.
 - [x] Confirmed conversation/autonomous is a chat subsystem under `engine/modes/chat`.
 - [x] Confirmed sidecar and sync-client are deferred external-service scope.
 - [~] Create `src/engine` layers from `docs/tauri-refactor/14-layered-module-architecture.md`.
-- [x] Replace server-stub frontend API with Tauri-backed API adapter.
-- [~] Build Rust capability commands for storage, assets/imports, LLM transport, integrations, and updates.
+- [~] Replace server-stub frontend API with typed Tauri/native calls. StorageGateway and LLMGateway now use direct Tauri commands, but the generic `api_request` router remains for many feature hooks and must keep shrinking.
+- [x] Build Rust capability commands for storage, assets/imports, LLM transport, and integrations.
 - [x] Removed direct browser `fetch('/api/...')` calls for local Fastify routes; local app calls now go through Tauri API adapters or local TypeScript helpers.
 - [x] Removed remaining active source `fetch()` calls; non-API blob loading no longer uses browser fetch.
 - [x] Removed sidecar from active onboarding, agent, connection, and game scene UI; sidecar and sync remain deferred scope only.
@@ -42,22 +42,22 @@ Last updated: 2026-05-18.
 
 - [ ] `src-tauri/src/app.rs` capability graph.
 - [x] `src-tauri/src/state.rs` shared state.
-- [x] `src-tauri/src/commands/mod.rs` command registration.
+- [x] Tauri command registration lives in `src-tauri/src/lib.rs`; the one-line `commands/mod.rs` shim was removed.
 - [x] `src-tauri/src/commands/storage.rs` command facade split into capability modules under `src-tauri/src/commands/storage/`.
-- [~] `src-tauri/src/commands/assets.rs` asset commands; currently routed through the storage command shim and `marinara-assets`.
+- [x] Asset commands are routed through focused storage capability modules and `marinara-assets`; the deleted top-level asset shim is no longer active.
 - [x] Import commands: character JSON/PNG/CharX, native `.marinara` packages, lorebooks, presets, personas, JSONL chat imports, native folder picking, ST bulk scan/run, current-format media restore, folder/group remapping, and current Marinara/ST heuristic handling are routed through native storage.
-- [ ] `src-tauri/src/commands/llm.rs` provider transport commands.
-- [ ] `src-tauri/src/commands/integrations.rs` integration commands.
-- [ ] `src-tauri/src/commands/updates.rs` update commands.
-- [ ] `src-tauri/src/events/mod.rs` event names/helpers.
+- [~] LLM provider transport commands are wired through typed Tauri commands, `commands/storage/llm.rs`, and `crates/llm`; `openai_chatgpt` and `claude_subscription` parity still needs a real native implementation before they can be restored to the active UI.
+- [x] Integration commands are wired through focused native storage modules and `crates/integrations`.
+- [x] Browser-era update/PWA commands were removed from the active Tauri app surface.
+- [x] Removed unused `src-tauri/src/events/mod.rs`; active streaming uses typed Tauri channels.
 - [x] `src-tauri/crates/core` paths, IDs, errors, timestamps.
 - [x] `src-tauri/crates/security` path and outbound policy helpers.
 - [x] `src-tauri/crates/storage` raw file storage and atomic writes.
 - [x] `src-tauri/crates/assets` file/blob/media handling for managed game assets and backgrounds.
-- [~] `src-tauri/crates/import` import file helpers.
+- [x] Import parsing and file helpers are active in the native storage/import modules.
 - [x] `src-tauri/crates/llm` provider transport.
 - [x] `src-tauri/crates/integrations` Spotify, TTS, translation, and haptic transport are wired through native commands.
-- [x] `src-tauri/crates/updates` update check/apply planning.
+- [x] Removed stale update-planning crate after the active settings update surface was deleted.
 - [d] `src-tauri/crates/sidecar` deferred external-service scope.
 - [d] `src-tauri/crates/sync-client` deferred external-service scope.
 - [d] `src-tauri/crates/sync-protocol` deferred until sync returns.
@@ -96,11 +96,11 @@ Last updated: 2026-05-18.
 
 - [x] Replaced remaining direct local Fastify browser fetches with Tauri-backed API helpers or local asset URL resolution.
 - [x] Added managed local file URL handling for backgrounds and game assets through Tauri asset protocol paths.
-- [x] Wired character, persona, preset, lorebook, connection, chat, gallery, backup, import, knowledge-source, bot-browser, GIF, and prompt-review utility frontend paths away from deferred throwing API shims.
+- [x] Wired character, persona, preset, lorebook, connection, chat, gallery, profile export/import, import, knowledge-source, bot-browser, GIF, and prompt-review utility frontend paths away from deferred throwing API shims.
 - [x] Added Tauri-backed chat gallery and character gallery upload/list/delete storage.
 - [x] Added Tauri-backed default Pollinations image test and avatar generation route, plus NPC avatar upload persistence.
 - [x] Hid active sidecar model controls from onboarding, agents, connections, and game scene setup/runtime surfaces.
-- [~] Added local new-app backup/import/profile routes with ZIP download payloads, profile JSON restore, and compatible exports; legacy backup/profile/archive compatibility is intentionally not handled in runtime code.
+- [x] Added local new-app profile/import routes with ZIP download payloads, profile JSON restore, and current-format exports; old backup/archive compatibility is not present in runtime code.
 - [~] Added Chub, Janny, CharacterTavern, Pygmalion, Wyvern, DataCat, and Chartavern bot-browser routes behind Rust transport; authenticated-session behavior now validates stored credentials for Pygmalion and Chartavern, but exact upstream parity still needs live-provider QA.
 
 ## 2026-05-18 Migration Pass
@@ -122,7 +122,7 @@ Last updated: 2026-05-18.
 - [x] Replaced bulk character/persona/preset/lorebook export JSON responses with ZIP binary download payloads, and replaced character PNG export placeholder with an embedded `chara` PNG card.
 - [x] Replaced avatar upload echo routes with local avatar persistence for characters, personas, and NPC portraits while keeping frontend-compatible avatar paths.
 - [x] Replaced persona activation, prompt default, chat-preset active, regex reorder, game-assets rescan/open-folder/folder-description, scoped admin expunge, and character-version restore placeholders with storage-backed behavior.
-- [x] Replaced game setup, session lorebook regeneration, session recap/carryover/conclusion, and campaign progression stubs with LLM-backed native flows plus deterministic local fallbacks where provider calls fail.
+- [x] Replaced game setup, session lorebook regeneration, session recap/carryover/conclusion, and campaign progression stubs with LLM-backed native flows; malformed JSON now raises a repair request that applies through TypeScript game APIs instead of missing server endpoints.
 - [x] Removed active `/game`, `/encounter`, `/conversation`, `/agents/retry`, and `/sidecar` frontend product-route calls; normal mode workflows now use TypeScript mode APIs over storage/assets/LLM/integration capabilities.
 - [x] Split shared chat/message repository hooks, common chat components, and chat UI types into neutral `src/features/chats`, so conversation, roleplay, and game mode code no longer depend on `features/conversation`.
 - [x] Wired custom static/webhook tools into the migrated agent runtime through native `/custom-tools/execute`; script execution remains explicitly disabled in the native runtime.
@@ -137,11 +137,36 @@ Last updated: 2026-05-18.
 - [x] Replaced prompt-review fallback assembly with full preset/section/group/choice-block orchestration over migrated storage and LLM streaming.
 - [x] Removed duplicate API re-export shims, deleted conversation-mode re-export wrappers, removed active sidecar/sync runtime branches, removed active legacy runtime compatibility paths, and kept old-data conversion out of normal app code.
 
+## 2026-05-18 Follow-up Parity Pass
+
+- [x] Re-ran old-vs-refactor source audits after the previous migration pass and patched concrete misses instead of documenting them only.
+- [x] Fixed game setup persistence so the full `GameSetupConfig`, party character IDs, persona, lorebooks, and selected connections survive `createGame` and `setupGame`.
+- [x] Made game start idempotent by detecting existing active GM turns before generating the first turn again.
+- [x] Replaced missing game JSON repair endpoints with local TypeScript apply handling for setup, session conclusion, session lorebook, and campaign progression JSON.
+- [x] Added game morale and element preset API methods and passed the selected element preset into combat resolution.
+- [x] Restored original sprite cleanup route names (`cleanup-saved`, `cleanup-restore`) while keeping fresh-app restore point data, and added cleanup status plus exact sprite file lookup routes.
+- [x] Persisted manual translations back to message `extra.translation`, and clear persisted translations when the user hides them.
+- [x] Tightened Memory Recall import to the new `marinara_memory_recall`/`data.chunks` schema only; old `memories` fallback imports were removed from runtime code.
+- [x] Expanded fresh-app profile export/import to include current collections and managed asset directories, with no old backup/archive/profile compatibility fallback.
+- [x] Removed browser XHR binary loading; URL binary reads now go through a native Tauri command.
+- [x] Moved engine storage and LLM gateways off the generic local route string and onto typed Tauri commands (`storage_*`, `llm_*`).
+- [x] Removed empty/dead crate placeholders, including deferred sidecar/sync placeholders.
+
+## Remaining Migration Gaps
+
+- [~] Generic local API router cleanup: `api_request`, `api_stream_events`, `api_stream_channel`, `shared/api/api-client.ts`, and many feature hooks still use method/path strings. StorageGateway and LLMGateway are direct now; assets, integrations, import/export helpers, and feature CRUD hooks still need typed command/client replacements.
+- [~] LLM provider parity: `openai_chatgpt` and `claude_subscription` are still not active because they need native Tauri implementations rather than the old Node SDK/server path.
+- [~] Prompt/command workflow parity: prompt reviewer and preset preview are migrated, but embedded command execution still needs a full current-app pass for the old command families that are still exposed in settings.
+- [~] Conversation autonomy parity: core local orchestration exists, but schedule inheritance, scene-busy filtering, talkativeness fallback, and follow-up limit parity still need deeper source-level migration.
+- [~] Spotify DJ playlist parity: native Spotify transport exists, but exact DJ Mari playlist construction/playback behavior still needs original-vs-refactor parity work.
+- [~] Bot browser and paid provider parity: native routes exist, but auth/session recovery for non-Chub providers still needs live-provider verification and fixes as upstreams change.
+- [~] Large-file cleanup: `imports.rs`, `bot_browser.rs`, and `sprites.rs` are split out of `storage.rs` but are still large enough to merit further provider/workflow submodule cleanup.
+
 ## Remaining External QA
 
 - [ ] Run live-account QA for upstream bot-browser providers that require credentials or are subject to Cloudflare/session policy changes.
-- [ ] Run live-provider QA across paid image providers, TTS providers, Spotify accounts/devices, and physical Buttplug/Intiface hardware. Native code paths are wired; these checks require external services/devices.
-- [ ] Run full manual Tauri UI smoke testing for imports/exports, sprite cleanup/restore, long-running game sessions, and autonomous scheduling with real user data. No source-level placeholder or old local-server blocker is currently known outside deferred sidecar/sync.
+- [ ] Run live-provider QA across paid image providers, TTS providers, Spotify accounts/devices, and physical Buttplug/Intiface hardware.
+- [ ] Run full manual Tauri UI smoke testing for imports/exports, sprite cleanup/restore, long-running game sessions, and autonomous scheduling with real user data after the remaining source-level migration gaps above are closed.
 
 ## Verification
 
@@ -166,3 +191,5 @@ Last updated: 2026-05-18.
 - [x] `cargo check --manifest-path src-tauri/Cargo.toml` passed on 2026-05-18 after full source migration parity and mode-separation cleanup.
 - [x] `pnpm check:docs` passed on 2026-05-18 after full source migration parity checklist update.
 - [x] `pnpm build` passed on 2026-05-18 after full source migration parity and mode-separation cleanup, with Vite large-chunk warnings only.
+- [x] `pnpm typecheck` passed on 2026-05-18 after game JSON repair, translation persistence, typed storage/LLM command, and sprite cleanup-route fixes.
+- [x] `cargo check --manifest-path src-tauri/Cargo.toml` passed on 2026-05-18 after typed storage/LLM command additions.

@@ -10,7 +10,7 @@ import { X, Save, RotateCcw, Trash2, Shield, Swords, MapPin, Clock } from "lucid
 import { cn } from "../../../shared/lib/utils";
 import { toast } from "sonner";
 import { useGameCheckpoints, useCreateCheckpoint, useLoadCheckpoint, useDeleteCheckpoint } from "../hooks/use-game";
-import type { GameCheckpoint, CheckpointTrigger } from "@marinara-engine/shared";
+import type { GameCheckpoint, CheckpointTrigger } from "../../../engine/contracts/types/game";
 
 interface GameCheckpointsProps {
   chatId: string;

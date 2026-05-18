@@ -28,7 +28,7 @@ import {
   useReorderRegexScripts,
   type RegexScriptRow,
 } from "../hooks/use-regex-scripts";
-import { BUILT_IN_AGENTS, type AgentCategory } from "@marinara-engine/shared";
+import { BUILT_IN_AGENTS, type AgentCategory } from "../../../engine/contracts/types/agent";
 import { showConfirmDialog } from "../../../shared/lib/app-dialogs";
 import { cn } from "../../../shared/lib/utils";
 
@@ -519,7 +519,7 @@ export function AgentsPanel() {
         }
       >
         <div className="text-[0.625rem] text-[var(--muted-foreground)] mb-1.5">
-          Define custom functions the AI can call during generation (webhook, script, or static).
+          Define custom functions the AI can call during generation (webhook or static).
         </div>
         {!customTools || (customTools as CustomToolRow[]).length === 0 ? (
           <p className="text-[0.625rem] text-[var(--muted-foreground)] px-1 py-2">No custom tools yet.</p>

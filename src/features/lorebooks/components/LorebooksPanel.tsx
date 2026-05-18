@@ -29,7 +29,7 @@ import { useUIStore } from "../../../shared/stores/ui.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useLorebooks, useDeleteLorebook, useUpdateLorebook, useUploadLorebookImage } from "../hooks/use-lorebooks";
 import { useCharacters, usePersonas } from "../../characters/hooks/use-characters";
-import type { Lorebook, LorebookCategory } from "@marinara-engine/shared";
+import type { Lorebook, LorebookCategory } from "../../../engine/contracts/types/lorebook";
 import { showConfirmDialog } from "../../../shared/lib/app-dialogs";
 import { cn } from "../../../shared/lib/utils";
 import { api } from "../../../shared/api/api-client";

@@ -1,12 +1,4 @@
-// ──────────────────────────────────────────────
-// Knowledge Retrieval Agent — Chunked RAG Pipeline
-// ──────────────────────────────────────────────
-// Scans lorebook entries (or other reference material) for information
-// relevant to the current conversation. If the material doesn't fit in
-// a single LLM context window, it splits it into chunks and runs
-// multiple extraction passes, then consolidates the results.
-// ──────────────────────────────────────────────
-import type { AgentContext, AgentResult } from "@marinara-engine/shared";
+import type { AgentContext, AgentResult } from "../../contracts/types/agent";
 import type { BaseLLMProvider } from "../../generation-core/llm/base-provider.js";
 import { executeAgent, type AgentExecConfig } from "../executor/agent-executor.js";
 

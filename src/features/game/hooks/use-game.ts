@@ -16,16 +16,9 @@ import { useGameStateStore } from "../../world-state/stores/world-state.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { gameApi } from "../api/game-api";
-import type {
-  GameActiveState,
-  GameMap,
-  GameSetupConfig,
-  Combatant,
-  CombatPlayerAction,
-  HudWidget,
-  GameBlueprint,
-} from "@marinara-engine/shared";
-import type { Chat } from "@marinara-engine/shared";
+import type { CombatMechanic } from "../../../engine/contracts/types/combat-encounter";
+import type { GameActiveState, GameMap, GameSetupConfig, Combatant, CombatPlayerAction, HudWidget, GameBlueprint } from "../../../engine/contracts/types/game";
+import type { Chat } from "../../../engine/contracts/types/chat";
 
 // ── Query Keys ──
 
@@ -75,6 +68,7 @@ export function useCreateGame() {
       characterConnectionId?: string;
       promptPresetId?: string;
       chatId?: string;
+      partyCharacterIds?: string[];
     }) => gameApi.createGame(data),
     onSuccess: (res) => {
       store.getState().setActiveGame(res.gameId, res.sessionChat.id, null);
@@ -94,7 +88,7 @@ export function useGameSetup() {
   const store = useGameModeStore;
 
   return useMutation({
-    mutationFn: (data: { chatId: string; connectionId?: string; preferences: string }) =>
+    mutationFn: (data: { chatId: string; connectionId?: string; preferences: string; setupConfig?: GameSetupConfig }) =>
       gameApi.setupGame(data),
     onSuccess: () => {
       store.getState().setSetupActive(false);
@@ -269,6 +263,13 @@ export function useRegenerateSessionLorebook() {
     },
     onError: (err, variables) => {
       console.error("[game/session/regenerate-lorebook] Error:", err);
+      if (isJsonRepairApiError(err)) {
+        toast.info("Review the generated lorebook JSON before applying it.", {
+          id: `game-session-lorebook:${variables.chatId}:${variables.sessionNumber}`,
+          duration: 8000,
+        });
+        return;
+      }
       toast.error(err.message || "Failed to regenerate session lorebook.", {
         id: `game-session-lorebook:${variables.chatId}:${variables.sessionNumber}`,
       });
@@ -606,7 +607,7 @@ export function useCombatRound() {
       combatants: Array<Omit<Combatant, "sprite">>;
       round: number;
       playerAction?: CombatPlayerAction;
-      mechanics?: import("@marinara-engine/shared").CombatMechanic[];
+      mechanics?: CombatMechanic[];
     }) => gameApi.combatRound(data),
   });
 }

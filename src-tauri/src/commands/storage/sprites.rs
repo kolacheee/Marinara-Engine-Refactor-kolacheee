@@ -33,7 +33,25 @@ pub(crate) fn sprite_capabilities() -> AppResult<Value> {
         "spriteGenerationAvailable": true,
         "backgroundRemovalAvailable": true,
         "reason": Value::Null,
-        "backgroundRemover": {
+        "cleanupEngine": {
+            "engine": "builtin",
+            "installed": true,
+            "command": Value::Null,
+            "source": "local",
+            "runtimeDir": "",
+            "reason": Value::Null
+        }
+    }))
+}
+
+pub(crate) fn sprite_cleanup_status() -> AppResult<Value> {
+    Ok(json!({
+        "available": true,
+        "engine": "builtin",
+        "installed": true,
+        "source": "local",
+        "reason": Value::Null,
+        "cleanupEngine": {
             "engine": "builtin",
             "installed": true,
             "command": Value::Null,
@@ -203,7 +221,7 @@ pub(crate) fn cleanup_generated_sprites(body: Value) -> AppResult<Value> {
     Ok(json!({
         "cells": processed,
         "engine": cleanup_engine(&body),
-        "backgroundRemoverProcessed": 0,
+        "externalCleanupProcessed": 0,
         "builtinProcessed": cells.len()
     }))
 }
@@ -230,6 +248,20 @@ pub(crate) fn list_sprites(state: &AppState, character_id: &str) -> AppResult<Va
     Ok(Value::Array(items))
 }
 
+pub(crate) fn sprite_file(
+    state: &AppState,
+    character_id: &str,
+    filename: &str,
+) -> AppResult<Value> {
+    validate_safe_segment(character_id, "character ID")?;
+    validate_safe_segment(filename, "sprite filename")?;
+    let path = sprites_dir(state, character_id).join(filename);
+    if !path.is_file() || !is_sprite_file(&path) {
+        return Err(AppError::not_found("Sprite file was not found"));
+    }
+    sprite_info_from_path(&path)
+}
+
 pub(crate) fn upload_sprite(state: &AppState, character_id: &str, body: Value) -> AppResult<Value> {
     validate_safe_segment(character_id, "character ID")?;
     let expression = body
@@ -250,7 +282,7 @@ pub(crate) fn upload_sprite(state: &AppState, character_id: &str, body: Value) -
     sprite_info_from_path(&path)
 }
 
-pub(crate) fn cleanup_saved_sprites(
+pub(crate) fn clean_saved_sprites(
     state: &AppState,
     character_id: &str,
     body: Value,
@@ -278,9 +310,9 @@ pub(crate) fn cleanup_saved_sprites(
         return Err(AppError::not_found("No matching sprites found"));
     }
 
-    let backup_id = format!("{}-{}", now_millis(), new_id());
-    let backup_dir = dir.join(".cleanup-backups").join(&backup_id);
-    fs::create_dir_all(&backup_dir)?;
+    let restore_point_id = format!("{}-{}", now_millis(), new_id());
+    let restore_point_dir = dir.join(".cleanup-restore-points").join(&restore_point_id);
+    fs::create_dir_all(&restore_point_dir)?;
     let mut entries = Vec::new();
     let mut failed = Vec::new();
     let mut processed = 0usize;
@@ -293,7 +325,7 @@ pub(crate) fn cleanup_saved_sprites(
         }
         match cleanup_file_to_png(&path, cleanup_strength(&body)) {
             Ok(cleaned) => {
-                fs::copy(&path, backup_dir.join(&filename))?;
+                fs::copy(&path, restore_point_dir.join(&filename))?;
                 let output_filename = format!("{expression}.png");
                 let output_path = dir.join(&output_filename);
                 fs::write(&output_path, cleaned)?;
@@ -304,7 +336,7 @@ pub(crate) fn cleanup_saved_sprites(
                     "expression": expression,
                     "originalFilename": filename,
                     "cleanedFilename": output_filename,
-                    "backupFilename": filename
+                    "restorePointFilename": filename
                 }));
                 processed += 1;
             }
@@ -312,12 +344,12 @@ pub(crate) fn cleanup_saved_sprites(
         }
     }
     if entries.is_empty() {
-        let _ = fs::remove_dir_all(&backup_dir);
+        let _ = fs::remove_dir_all(&restore_point_dir);
     } else {
         fs::write(
-            backup_dir.join("manifest.json"),
+            restore_point_dir.join("manifest.json"),
             serde_json::to_vec_pretty(&json!({
-                "id": backup_id,
+                "id": restore_point_id,
                 "createdAt": now_iso(),
                 "entries": entries
             }))?,
@@ -326,30 +358,30 @@ pub(crate) fn cleanup_saved_sprites(
     Ok(json!({
         "processed": processed,
         "failed": failed,
-        "backupId": if processed > 0 { json!(backup_id) } else { Value::Null },
+        "restorePointId": if processed > 0 { json!(restore_point_id) } else { Value::Null },
         "engine": cleanup_engine(&body),
-        "backgroundRemoverProcessed": 0,
+        "externalCleanupProcessed": 0,
         "builtinProcessed": processed,
         "sprites": list_sprites(state, character_id)?
     }))
 }
 
-pub(crate) fn restore_sprite_cleanup(
+pub(crate) fn restore_sprite_cleanup_point(
     state: &AppState,
     character_id: &str,
     body: Value,
 ) -> AppResult<Value> {
     validate_safe_segment(character_id, "character ID")?;
-    let backup_id = body
-        .get("backupId")
+    let restore_point_id = body
+        .get("restorePointId")
         .and_then(Value::as_str)
         .filter(|id| id.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '-'))
-        .ok_or_else(|| AppError::invalid_input("Invalid backup ID"))?;
+        .ok_or_else(|| AppError::invalid_input("Invalid cleanup restore point ID"))?;
     let dir = sprites_dir(state, character_id);
-    let backup_dir = dir.join(".cleanup-backups").join(backup_id);
-    let manifest_path = backup_dir.join("manifest.json");
+    let restore_point_dir = dir.join(".cleanup-restore-points").join(restore_point_id);
+    let manifest_path = restore_point_dir.join("manifest.json");
     if !manifest_path.exists() {
-        return Err(AppError::not_found("Cleanup backup was not found"));
+        return Err(AppError::not_found("Cleanup restore point was not found"));
     }
     let manifest: Value = serde_json::from_slice(&fs::read(&manifest_path)?)?;
     let mut restored = 0usize;
@@ -365,8 +397,8 @@ pub(crate) fn restore_sprite_cleanup(
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
-        let backup_filename = entry
-            .get("backupFilename")
+        let restore_point_filename = entry
+            .get("restorePointFilename")
             .and_then(Value::as_str)
             .unwrap_or("");
         let original_filename = entry
@@ -377,15 +409,15 @@ pub(crate) fn restore_sprite_cleanup(
             .get("cleanedFilename")
             .and_then(Value::as_str)
             .unwrap_or("");
-        if [backup_filename, original_filename, cleaned_filename]
+        if [restore_point_filename, original_filename, cleaned_filename]
             .iter()
-            .any(|name| validate_safe_segment(name, "backup filename").is_err())
+            .any(|name| validate_safe_segment(name, "restore point filename").is_err())
         {
-            failed.push(json!({ "expression": expression, "error": "Backup entry has an invalid filename" }));
+            failed.push(json!({ "expression": expression, "error": "Restore point entry has an invalid filename" }));
             continue;
         }
         match fs::copy(
-            backup_dir.join(backup_filename),
+            restore_point_dir.join(restore_point_filename),
             dir.join(original_filename),
         ) {
             Ok(_) => {
@@ -400,7 +432,7 @@ pub(crate) fn restore_sprite_cleanup(
         }
     }
     if restored > 0 && failed.is_empty() {
-        let _ = fs::remove_dir_all(&backup_dir);
+        let _ = fs::remove_dir_all(&restore_point_dir);
     }
     Ok(
         json!({ "restored": restored, "failed": failed, "sprites": list_sprites(state, character_id)? }),
@@ -1437,7 +1469,6 @@ fn cleanup_engine(body: &Value) -> String {
         .to_ascii_lowercase()
         .as_str()
     {
-        "backgroundremover" | "background-remover" | "ai" => "backgroundremover".to_string(),
         "builtin" | "built-in" | "matte" | "white" => "builtin".to_string(),
         _ => "auto".to_string(),
     }

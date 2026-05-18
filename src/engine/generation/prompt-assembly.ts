@@ -1,5 +1,6 @@
-import type { ChatMLMessage, LorebookEntry, MarkerConfig, WrapFormat } from "@marinara-engine/shared";
-import type { StorageGateway } from "../capabilities";
+import type { LorebookEntry } from "../contracts/types/lorebook";
+import type { ChatMLMessage, MarkerConfig, WrapFormat } from "../contracts/types/prompt";
+import type { StorageGateway } from "../capabilities/storage";
 import { injectAtDepth, processActivatedEntries } from "../generation-core/lorebooks/prompt-injector";
 import { scanForActivatedEntries, type ActivatedEntry } from "../generation-core/lorebooks/keyword-scanner";
 import { wrapContent } from "../generation-core/prompt/format-engine";
@@ -328,6 +329,140 @@ function chatSummary(chat: JsonRecord): string | null {
   return parts.length > 0 ? parts.join("\n\n") : null;
 }
 
+const MEMORY_EMBEDDING_DIMS = 256;
+const DEFAULT_MEMORY_RECALL_BUDGET_TOKENS = 1024;
+const MIN_MEMORY_RECALL_BUDGET_TOKENS = 256;
+const MAX_MEMORY_RECALL_BUDGET_TOKENS = 2048;
+const MAX_RECALLED_MEMORY_TOKENS = 384;
+const MIN_RECALLED_MEMORY_TOKENS = 96;
+const MEMORY_RECALL_CONTEXT_SHARE = 0.15;
+const RECALL_TRUNCATION_MARKER = "\n...[recalled memory truncated]...\n";
+
+function estimateTextTokens(text: string): number {
+  const trimmed = text.trim();
+  return trimmed ? Math.max(1, Math.ceil(trimmed.length / 4)) : 0;
+}
+
+function lexicalMemoryEmbedding(text: string): number[] {
+  const vector = Array.from({ length: MEMORY_EMBEDDING_DIMS }, () => 0);
+  for (const match of text.toLowerCase().matchAll(/[a-z0-9]{2,}/g)) {
+    let hash = 2166136261;
+    for (let index = 0; index < match[0].length; index += 1) {
+      hash ^= match[0].charCodeAt(index);
+      hash = Math.imul(hash, 16777619) >>> 0;
+    }
+    vector[hash % MEMORY_EMBEDDING_DIMS] += 1;
+  }
+  const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+  return magnitude > 0 ? vector.map((value) => value / magnitude) : vector;
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0;
+  let dot = 0;
+  let magA = 0;
+  let magB = 0;
+  for (let index = 0; index < a.length; index += 1) {
+    const left = a[index] ?? 0;
+    const right = b[index] ?? 0;
+    dot += left * right;
+    magA += left * left;
+    magB += right * right;
+  }
+  const denominator = Math.sqrt(magA) * Math.sqrt(magB);
+  return denominator > 0 ? dot / denominator : 0;
+}
+
+function memoryVector(memory: JsonRecord): number[] | null {
+  if (!Array.isArray(memory.embedding)) return null;
+  const vector = memory.embedding.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return vector.length === MEMORY_EMBEDDING_DIMS ? vector : null;
+}
+
+function truncateRecalledMemory(content: string, tokenBudget: number): string {
+  const maxChars = Math.max(32, tokenBudget * 4);
+  if (content.length <= maxChars) return content;
+  const availableChars = maxChars - RECALL_TRUNCATION_MARKER.length;
+  if (availableChars <= 0) return content.slice(0, maxChars);
+  const headChars = Math.max(16, Math.ceil(availableChars * 0.7));
+  const tailChars = Math.max(16, availableChars - headChars);
+  return `${content.slice(0, headChars).trimEnd()}${RECALL_TRUNCATION_MARKER}${content.slice(-tailChars).trimStart()}`;
+}
+
+function packRecalledMemories(recalled: Array<{ content: string }>, maxContext?: number) {
+  const targetBudget = maxContext
+    ? Math.floor(maxContext * MEMORY_RECALL_CONTEXT_SHARE)
+    : DEFAULT_MEMORY_RECALL_BUDGET_TOKENS;
+  const budgetTokens = Math.max(
+    MIN_MEMORY_RECALL_BUDGET_TOKENS,
+    Math.min(MAX_MEMORY_RECALL_BUDGET_TOKENS, targetBudget),
+  );
+  const lines: string[] = [];
+  let estimatedTokens = 0;
+  for (const memory of recalled) {
+    const remainingTokens = budgetTokens - estimatedTokens;
+    if (remainingTokens < MIN_RECALLED_MEMORY_TOKENS) break;
+    const packed = truncateRecalledMemory(memory.content, Math.min(MAX_RECALLED_MEMORY_TOKENS, remainingTokens));
+    const packedTokens = estimateTextTokens(packed);
+    if (packedTokens <= 0 || packedTokens > remainingTokens) break;
+    lines.push(packed);
+    estimatedTokens += packedTokens;
+  }
+  return { lines, estimatedTokens, budgetTokens };
+}
+
+function memoryRecallEnabled(chat: JsonRecord): boolean {
+  const meta = parseRecord(chat.metadata);
+  if (typeof meta.enableMemoryRecall === "boolean") return meta.enableMemoryRecall;
+  const mode = readString(chat.mode || chat.chatMode);
+  return mode === "conversation" || meta.sceneStatus === "active";
+}
+
+async function buildMemoryRecallBlock(
+  storage: StorageGateway,
+  chat: JsonRecord,
+  latestUserInput: string,
+  maxContext?: number,
+): Promise<string | null> {
+  if (!memoryRecallEnabled(chat) || !latestUserInput.trim()) return null;
+  const chatId = readString(chat.id).trim();
+  if (!chatId) return null;
+  let memories: JsonRecord[] = [];
+  try {
+    const rows = await storage.request<unknown>("GET", `/chats/${encodeURIComponent(chatId)}/memories`);
+    memories = Array.isArray(rows) ? rows.filter(isRecord) : [];
+  } catch {
+    memories = Array.isArray(chat.memories) ? chat.memories.filter(isRecord) : [];
+  }
+  if (memories.length === 0) return null;
+
+  const queryVector = lexicalMemoryEmbedding(latestUserInput);
+  const queryTokens = new Set(latestUserInput.toLowerCase().match(/[a-z0-9]{2,}/g) ?? []);
+  const recalled = memories
+    .map((memory) => {
+      const content = readString(memory.content).trim();
+      if (!content) return null;
+      const vector = memoryVector(memory) ?? lexicalMemoryEmbedding(content);
+      const haystack = content.toLowerCase();
+      const lexicalScore = Array.from(queryTokens).reduce((score, token) => score + (haystack.includes(token) ? 1 : 0), 0);
+      const similarity = cosineSimilarity(queryVector, vector) + Math.min(0.2, lexicalScore * 0.025);
+      return { content, similarity };
+    })
+    .filter((memory): memory is { content: string; similarity: number } => !!memory && memory.similarity > 0)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 8);
+  if (recalled.length === 0) return null;
+
+  const packed = packRecalledMemories(recalled, maxContext);
+  if (packed.lines.length === 0) return null;
+  return [
+    "<memories>",
+    "The following are recalled fragments from earlier in this chat. Use them to maintain continuity, remember past events, and stay in character. Do not explicitly reference memory recall unless it is natural.",
+    ...packed.lines.map((line, index) => `--- Memory ${index + 1} ---\n${line}`),
+    "</memories>",
+  ].join("\n");
+}
+
 function normalizeRole(value: unknown): "system" | "user" | "assistant" {
   return value === "system" || value === "assistant" ? value : "user";
 }
@@ -507,6 +642,12 @@ export async function assembleGenerationPrompt(
   const activated = await loadActivatedLore(storage, input.chat, characters, persona, input.storedMessages);
   const processedLore = processActivatedEntries(activated, readNumber(input.request.lorebookTokenBudget, 0));
   const summary = chatSummary(input.chat);
+  const memoryRecallBlock = await buildMemoryRecallBlock(
+    storage,
+    input.chat,
+    input.latestUserInput,
+    readNumber(input.connection.maxContext, 0) || undefined,
+  );
   const defaultPrompt = await loadDefaultPromptId(storage);
   const presetId = promptPresetId(input.chat, input.connection, input.request, defaultPrompt);
   const wrapFormat = (readString(input.chat.wrapFormat) || readString(input.connection.wrapFormat) || "xml") as WrapFormat;
@@ -574,6 +715,15 @@ export async function assembleGenerationPrompt(
 
   if (!insertedHistory) {
     messages.push(...history);
+  }
+
+  if (memoryRecallBlock) {
+    const insertAt = messages.findIndex((message) => message.role === "user" || message.role === "assistant");
+    messages.splice(insertAt >= 0 ? insertAt : messages.length, 0, {
+      role: "system",
+      content: memoryRecallBlock,
+      contextKind: "prompt",
+    });
   }
 
   messages = injectAtDepth(messages, processedLore.depthEntries);

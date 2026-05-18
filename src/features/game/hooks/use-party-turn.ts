@@ -1,15 +1,14 @@
 // ──────────────────────────────────────────────
 // Hook: usePartyTurn
 //
-// Calls the party-turn endpoint to generate
-// party member reactions to the GM narration.
+// Generates party member reactions to the GM narration.
 // ──────────────────────────────────────────────
 
 import { useMutation } from "@tanstack/react-query";
 import { parsePartyDialogue } from "../lib/party-dialogue-parser";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { gameApi } from "../api/game-api";
-import type { PartyDialogueLine } from "@marinara-engine/shared";
+import type { PartyDialogueLine } from "../../../engine/contracts/types/game";
 
 interface PartyTurnInput {
   chatId: string;

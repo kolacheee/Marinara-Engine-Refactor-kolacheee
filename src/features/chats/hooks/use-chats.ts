@@ -2,8 +2,9 @@
 // React Query: neutral chat data hooks used by conversation, roleplay, and game.
 // ──────────────────────────────────────────────
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
-import { previewGenerationPrompt } from "../../../engine/generation";
-import { backfillConversationSummaries } from "../../../engine/modes/chat";
+import { previewGenerationPrompt } from "../../../engine/generation/prompt-preview";
+import { backfillConversationSummaries } from "../../../engine/modes/chat/core/summaries/auto-summary.service";
+import { appendChatSummaryEntryToMetadata } from "../../../engine/shared/text/chat-summary-entries";
 import { llmApi } from "../../../shared/api/llm-api";
 import { storageApi } from "../../../shared/api/storage-api";
 import { api } from "../../../shared/api/api-client";
@@ -12,18 +13,9 @@ import { useAgentStore } from "../../../shared/stores/agent.store";
 import { useGameStateStore } from "../../world-state/stores/world-state.store";
 import { useEncounterStore } from "../../../shared/stores/encounter.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
-import { clearBrowserRuntimeCaches } from "../../../shared/lib/browser-runtime";
 import { ApiError } from "../../../shared/api/api-client";
 import { lorebookKeys } from "../../lorebooks/hooks/use-lorebooks";
-import type {
-  Chat,
-  ChatMemoryChunk,
-  ConversationNote,
-  Message,
-  MessageSwipe,
-  DaySummaryEntry,
-  WeekSummaryEntry,
-} from "@marinara-engine/shared";
+import type { Chat, ChatMemoryChunk, ConversationNote, Message, MessageSwipe, DaySummaryEntry, WeekSummaryEntry } from "../../../engine/contracts/types/chat";
 
 export const chatKeys = {
   all: ["chats"] as const,
@@ -132,7 +124,6 @@ export interface ConversationSummaryBackfillResult {
 }
 
 async function resetClientAfterExpunge(qc: ReturnType<typeof useQueryClient>) {
-  await clearBrowserRuntimeCaches();
   useChatStore.getState().reset();
   useAgentStore.getState().reset();
   useGameStateStore.getState().reset();
@@ -240,6 +231,35 @@ export function useRefreshChatMemories(chatId: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => api.post<{ rebuilt: number }>(`/chats/${chatId}/memories/refresh`),
+    onSuccess: () => {
+      if (chatId) qc.invalidateQueries({ queryKey: chatKeys.memories(chatId) });
+    },
+  });
+}
+
+export function useExportChatMemories(chatId: string | null) {
+  return useMutation({
+    mutationFn: async () => {
+      if (!chatId) throw new Error("No chat selected.");
+      await api.download(`/chats/${chatId}/memories/export`, "memory-recall.marinara.json");
+    },
+  });
+}
+
+export type ChatMemoryRecallImportResult = {
+  imported: number;
+  skipped: number;
+};
+
+export function useImportChatMemories(chatId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      if (!chatId) throw new Error("No chat selected.");
+      const text = await file.text();
+      const payload = JSON.parse(text) as unknown;
+      return api.post<ChatMemoryRecallImportResult>(`/chats/${chatId}/memories/import`, payload);
+    },
     onSuccess: () => {
       if (chatId) qc.invalidateQueries({ queryKey: chatKeys.memories(chatId) });
     },
@@ -692,6 +712,102 @@ function formatChatText(messages: Message[]) {
     .join("\n\n");
 }
 
+function parseRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function messageHiddenFromAi(message: Message) {
+  const extra = parseRecord(message.extra);
+  return extra.hiddenFromAI === true || extra.hiddenFromAi === true;
+}
+
+function compactTranscript(messages: Message[]) {
+  return messages
+    .map((message, index) => {
+      const role = message.role === "assistant" ? "Assistant" : message.role === "system" ? "System" : "User";
+      return `[${index + 1}] ${role}: ${(message.content ?? "").trim()}`;
+    })
+    .join("\n\n");
+}
+
+async function resolveSummaryConnectionId(chat: Chat): Promise<string> {
+  if (typeof chat.connectionId === "string" && chat.connectionId.trim()) return chat.connectionId.trim();
+  const connections = await storageApi.list<Record<string, unknown>>("connections");
+  const selected =
+    connections.find((connection) => connection.isDefault === true || connection.default === true) ?? connections[0];
+  const connectionId = typeof selected?.id === "string" ? selected.id.trim() : "";
+  if (!connectionId) throw new Error("No API connection configured for summary generation.");
+  return connectionId;
+}
+
+async function generateLlmChatSummary(chatId: string, contextSize?: number): Promise<{ summary: string }> {
+  const [chat, allMessages] = await Promise.all([
+    storageApi.get<Chat>("chats", chatId),
+    storageApi.request<Message[]>("GET", `/chats/${encodeURIComponent(chatId)}/messages`),
+  ]);
+  if (!chat) throw new Error("Chat was not found.");
+  const storedContextSize = Number((chat.metadata as { summaryContextSize?: unknown } | null)?.summaryContextSize);
+  const limit = Math.max(5, Math.min(200, Math.trunc(contextSize ?? (Number.isFinite(storedContextSize) ? storedContextSize : 50))));
+  const selected = allMessages
+    .filter((message) => !messageHiddenFromAi(message) && !!message.content?.trim())
+    .slice(-limit);
+  if (selected.length === 0) throw new Error("No non-hidden messages available for summary generation.");
+
+  const connectionId = await resolveSummaryConnectionId(chat);
+  const transcript = compactTranscript(selected);
+  const rawSummary = await llmApi.complete({
+    connectionId,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Summarize the provided chat transcript for future roleplay/conversation context. Preserve durable facts, relationships, goals, decisions, unresolved threads, and emotional state. Do not add new events.",
+      },
+      {
+        role: "user",
+        content: `Create a concise but useful memory summary from this transcript:\n\n${transcript}`,
+      },
+    ],
+    parameters: { temperature: 0.2, maxTokens: 700 },
+  });
+  const content = rawSummary.trim();
+  if (!content) throw new Error("Summary generation returned an empty response.");
+
+  const metadata = parseRecord(chat.metadata);
+  const now = new Date().toISOString();
+  const appended = appendChatSummaryEntryToMetadata(
+    metadata,
+    {
+      content,
+      origin: "manual",
+      sourceMode: "last",
+      title: "Summary of recent messages",
+      messageCount: selected.length,
+      messageIds: selected.map((message) => message.id),
+    },
+    {
+      now,
+      createId: () =>
+        globalThis.crypto?.randomUUID ? `summary-${globalThis.crypto.randomUUID()}` : `summary-${Date.now()}`,
+    },
+  );
+
+  await storageApi.request("PATCH", `/chats/${encodeURIComponent(chatId)}/metadata`, {
+    summary: appended.summary,
+    summaryEntries: appended.entries,
+    summaryContextSize: limit,
+  });
+  return { summary: appended.summary ?? content };
+}
+
 /** Peek at the assembled prompt for a chat */
 export function usePeekPrompt() {
   return useMutation({
@@ -738,6 +854,41 @@ export function useExportChat() {
   });
 }
 
+/** Export selected chats as one native Marinara JSON package. */
+export function useBulkExportChats() {
+  return useMutation({
+    mutationFn: async ({ chatIds }: { chatIds: string[] }) => {
+      const ids = Array.from(new Set(chatIds.filter((id) => id.trim().length > 0)));
+      if (ids.length === 0) throw new Error("Choose at least one chat to export.");
+      const chats = await Promise.all(
+        ids.map(async (chatId) => {
+          const [chat, messages] = await Promise.all([
+            api.get<Chat>(`/chats/${chatId}`),
+            api.get<Message[]>(`/chats/${chatId}/messages`),
+          ]);
+          return { chat, messages };
+        }),
+      );
+      const exportedAt = new Date().toISOString();
+      downloadTextFile(
+        JSON.stringify(
+          {
+            format: "marinara-chat-bulk",
+            version: 1,
+            exportedAt,
+            count: chats.length,
+            chats,
+          },
+          null,
+          2,
+        ),
+        `marinara-chats-${exportedAt.slice(0, 10)}.json`,
+        "application/json;charset=utf-8",
+      );
+    },
+  });
+}
+
 /** Create a branch (copy) of an existing chat */
 export function useBranchChat() {
   const qc = useQueryClient();
@@ -764,7 +915,7 @@ export function useGenerateSummary() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ chatId, contextSize }: { chatId: string; contextSize?: number }) =>
-      api.post<{ summary: string }>(`/chats/${chatId}/generate-summary`, { contextSize }),
+      generateLlmChatSummary(chatId, contextSize),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: chatKeys.detail(vars.chatId) });
     },

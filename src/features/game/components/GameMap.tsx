@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 import { useState, useCallback, useEffect, useRef, type PointerEvent, type RefObject } from "react";
 import { motion } from "framer-motion";
-import type { GameMap, GameActiveState } from "@marinara-engine/shared";
+import type { GameMap, GameActiveState } from "../../../engine/contracts/types/game";
 import { GameGridMap } from "./GameGridMap";
 import { GameNodeMap } from "./GameNodeMap";
 import {

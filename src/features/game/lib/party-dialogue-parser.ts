@@ -1,20 +1,4 @@
-// ──────────────────────────────────────────────
-// Party Dialogue Parser
-//
-// Parses structured party response lines into
-// typed dialogue lines for the narration system.
-//
-// Format:
-//   [Name] [main] [expression]: "Dialogue text here."
-//   [Name] [side] [expression]: "Side remark text."
-//   [Name] [action] [expression]: Description of action.
-//   [Name] [thought] [expression]: Internal monologue text.
-//   [Name] [whisper:Target] [expression]: "Whispered text."
-//   [Name] [react] [expression]: *expression/gesture*
-//   Expression tag is optional — lines without it still parse.
-// ──────────────────────────────────────────────
-
-import type { PartyDialogueLine, PartyDialogueType } from "@marinara-engine/shared";
+import type { PartyDialogueLine, PartyDialogueType } from "../../../engine/contracts/types/game";
 import { stripSurroundingDialogueQuotes } from "../../../shared/lib/dialogue-quotes";
 
 const VALID_TYPES = new Set<PartyDialogueType>(["main", "side", "extra", "action", "thought", "whisper"]);

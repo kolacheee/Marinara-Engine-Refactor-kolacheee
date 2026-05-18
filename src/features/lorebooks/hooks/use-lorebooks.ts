@@ -2,10 +2,10 @@
 // React Query: Lorebook hooks
 // ──────────────────────────────────────────────
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { scanActiveLorebookEntries } from "../../../engine/generation";
+import { scanActiveLorebookEntries } from "../../../engine/generation/active-lorebooks";
 import { storageApi } from "../../../shared/api/storage-api";
 import { api, ApiError } from "../../../shared/api/api-client";
-import type { Lorebook, LorebookEntry, LorebookFolder } from "@marinara-engine/shared";
+import type { Lorebook, LorebookEntry, LorebookFolder } from "../../../engine/contracts/types/lorebook";
 import { characterKeys } from "../../characters/hooks/use-characters";
 
 export const lorebookKeys = {
@@ -26,7 +26,11 @@ export const lorebookKeys = {
 export function useLorebooks(category?: string) {
   return useQuery({
     queryKey: category ? lorebookKeys.byCategory(category) : lorebookKeys.list(),
-    queryFn: () => api.get<Lorebook[]>(category ? `/lorebooks?category=${category}` : "/lorebooks"),
+    queryFn: async () => {
+      const lorebooks = await api.get<Lorebook[]>("/lorebooks");
+      if (!category) return lorebooks;
+      return lorebooks.filter((lorebook) => (lorebook.category ?? "uncategorized") === category);
+    },
     staleTime: 5 * 60_000,
   });
 }

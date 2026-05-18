@@ -44,7 +44,7 @@ export function ImportPersonaModal({ open, onClose }: Props) {
     const nextResults: Array<{ filename: string; success: boolean; message: string }> = [];
     for (const file of files) {
       try {
-        // Marinara native packages are .marinara files (zip with data.json +
+        // Marinara native files are .marinara files (zip with data.json +
         // avatar binary). Detect via the zip signature so a renamed file
         // still works.
         if (await isZipFile(file)) {
@@ -55,7 +55,7 @@ export function ImportPersonaModal({ open, onClose }: Props) {
             JSON.stringify({ createdAt: file.lastModified, updatedAt: file.lastModified }),
           );
           const data = await api.upload<{ success: boolean; name?: string; error?: string }>(
-            "/import/marinara-package",
+            "/import/marinara-file",
             form,
           );
           nextResults.push({

@@ -1,9 +1,4 @@
-// ──────────────────────────────────────────────
-// Game: NPC Tracker Panel
-// Shows NPCs present in the current scene with
-// avatars and reputation.
-// ──────────────────────────────────────────────
-import type { GameNpc } from "@marinara-engine/shared";
+import type { GameNpc } from "../../../engine/contracts/types/game";
 import { Users, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../../../shared/lib/utils";

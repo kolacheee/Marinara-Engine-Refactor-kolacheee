@@ -7,14 +7,9 @@ import type {
   LLMToolCall,
   LLMToolDefinition,
 } from "../../generation-core/llm/base-provider.js";
-import type { AgentResult, AgentContext, AgentResultType } from "@marinara-engine/shared";
-import {
-  DEFAULT_AGENT_CONTEXT_SIZE,
-  DEFAULT_AGENT_MAX_TOKENS,
-  MAX_AGENT_MAX_TOKENS,
-  MIN_AGENT_MAX_TOKENS,
-  getDefaultAgentPrompt,
-} from "@marinara-engine/shared";
+import type { AgentResult, AgentContext, AgentResultType } from "../../contracts/types/agent";
+import { getDefaultAgentPrompt } from "../../contracts/constants/agent-prompts";
+import { DEFAULT_AGENT_CONTEXT_SIZE, DEFAULT_AGENT_MAX_TOKENS, MAX_AGENT_MAX_TOKENS, MIN_AGENT_MAX_TOKENS } from "../../contracts/types/agent";
 const isDebugAgentsEnabled = () => false;
 const logger = {
   debug: (..._args: unknown[]) => {},

@@ -51,7 +51,7 @@ sound libraries (OpenGameArt, Freesound.org CC0 tier, Kenney, etc.).
 
 ## Adding Your Own Assets
 
-Drop files into the appropriate subdirectory and hit the **Rescan** button in the app, or call `POST /api/game-assets/rescan`.
+Drop files into the appropriate subdirectory and hit the **Rescan** button in the app.
 
 Supported formats:
 

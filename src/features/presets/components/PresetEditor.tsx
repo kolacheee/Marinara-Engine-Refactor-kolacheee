@@ -62,11 +62,12 @@ import { HelpTooltip } from "../../../shared/components/ui/HelpTooltip";
 import { DraftNumberInput } from "../../../shared/components/ui/DraftNumberInput";
 import { api } from "../../../shared/api/api-client";
 import { connectionsUtilityApi } from "../../../shared/api/integration-utility-api";
-import { reviewPromptPreset } from "../../../engine/generation";
+import { reviewPromptPreset } from "../../../engine/generation/prompt-reviewer";
 import { llmApi } from "../../../shared/api/llm-api";
 import { storageApi } from "../../../shared/api/storage-api";
 import { useAgentConfigs, type AgentConfigRow } from "../../agents/hooks/use-agents";
-import { SUPPORTED_MACROS, type WrapFormat, type MarkerType } from "@marinara-engine/shared";
+import type { WrapFormat, MarkerType } from "../../../engine/contracts/types/prompt";
+import { SUPPORTED_MACROS } from "../../../engine/shared/macros/macro-engine";
 
 /** Intercept Tab in a textarea to insert 2 spaces instead of changing focus. */
 function handleTextareaTab(e: React.KeyboardEvent<HTMLTextAreaElement>, value: string, setValue: (v: string) => void) {

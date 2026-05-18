@@ -1,11 +1,4 @@
-// ──────────────────────────────────────────────
-// Game: NPC Reputation Math Service
-//
-// Deterministic reputation adjustments from tagged
-// player actions. No LLM needed for the math.
-// ──────────────────────────────────────────────
-
-import type { GameNpc } from "@marinara-engine/shared";
+import type { GameNpc } from "../../../contracts/types/game";
 
 /** Action tags and their default reputation modifiers. */
 const ACTION_MODIFIERS: Record<string, number> = {

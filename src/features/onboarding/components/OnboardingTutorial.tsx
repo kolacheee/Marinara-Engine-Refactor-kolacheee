@@ -7,7 +7,7 @@ import { useChatStore } from "../../../shared/stores/chat.store";
 import { useCreateChat } from "../../chats/hooks/use-chats";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ArrowRightLeft } from "lucide-react";
-import { PROFESSOR_MARI_ID, DEFAULT_CONNECTION_ID } from "@marinara-engine/shared";
+import { PROFESSOR_MARI_ID, DEFAULT_CONNECTION_ID } from "../../../engine/contracts/constants/defaults";
 import { api } from "../../../shared/api/api-client";
 
 // ─── Step definitions ─────────────────────────
@@ -75,10 +75,10 @@ const STEPS: TourStep[] = [
   },
   {
     target: null,
-    title: "Migrating from SillyTavern?",
+    title: "Importing from SillyTavern?",
     body: "If you have characters, chats, or presets from SillyTavern, you can import them all in one go from the Settings panel.",
     actionLabel: "Take Me There",
-    actionKey: "migrate",
+    actionKey: "import",
     sprite: { src: "/sprites/mari/Mari_thinking.png" },
   },
   {
@@ -276,7 +276,7 @@ function TourCardContent({
         ))}
       </div>
 
-      {/* Action button (e.g. migrate) */}
+      {/* Action button */}
       {currentStep.actionLabel && currentStep.actionKey && onAction && (
         <button
           onClick={() => onAction(currentStep.actionKey!)}
@@ -453,7 +453,7 @@ function OnboardingTutorialInner() {
 
   const handleAction = useCallback(
     (key: string) => {
-      if (key === "migrate") {
+      if (key === "import") {
         openRightPanel("settings");
         setSettingsTab("import");
         // Jump to last step instead of finishing

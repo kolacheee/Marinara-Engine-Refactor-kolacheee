@@ -1,4 +1,4 @@
-import type { IntegrationGateway } from "../../engine/capabilities";
+import type { IntegrationGateway } from "../../engine/capabilities/integrations";
 import { invokeTauri } from "./tauri-client";
 
 export const integrationsApi: IntegrationGateway = {

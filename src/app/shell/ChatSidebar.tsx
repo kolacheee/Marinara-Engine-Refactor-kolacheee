@@ -25,8 +25,15 @@ import {
   ArrowUpDown,
   Tag,
   Pencil,
+  Download,
 } from "lucide-react";
-import { useChats, useCreateChat, useDeleteChat, useDeleteChatGroup } from "../../features/chats/hooks/use-chats";
+import {
+  useBulkExportChats,
+  useChats,
+  useCreateChat,
+  useDeleteChat,
+  useDeleteChatGroup,
+} from "../../features/chats/hooks/use-chats";
 import { useChatPresets, useApplyChatPreset } from "../../features/chat-presets/hooks/use-chat-presets";
 import { useConnections } from "../../features/connections/hooks/use-connections";
 import {
@@ -43,7 +50,7 @@ import { showConfirmDialog } from "../../shared/lib/app-dialogs";
 import { useUIStore, type UserStatus } from "../../shared/stores/ui.store";
 import { cn, getAvatarCropStyle, type AvatarCropValue } from "../../shared/lib/utils";
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import type { Chat, ChatFolder, ChatMode } from "@marinara-engine/shared";
+import type { Chat, ChatFolder, ChatMode } from "../../engine/contracts/types/chat";
 import { Modal } from "../../shared/components/ui/Modal";
 import { Reorder, useDragControls } from "framer-motion";
 import { parseChatMetadata } from "../../shared/lib/chat-display";
@@ -118,6 +125,7 @@ export function ChatSidebar() {
   const applyChatPreset = useApplyChatPreset();
   const deleteChat = useDeleteChat();
   const deleteChatGroup = useDeleteChatGroup();
+  const bulkExportChats = useBulkExportChats();
   const activeChatId = useChatStore((s) => s.activeChatId);
   const setActiveChatId = useChatStore((s) => s.setActiveChatId);
   const unreadCounts = useChatStore((s) => s.unreadCounts);
@@ -568,6 +576,12 @@ export function ChatSidebar() {
     if (activeChatId && selectedChatIds.has(activeChatId)) setActiveChatId(null);
     exitMultiSelect();
   }, [selectedChatIds, deleteChat, activeChatId, setActiveChatId, exitMultiSelect]);
+
+  const handleBatchExport = useCallback(async () => {
+    if (selectedChatIds.size === 0) return;
+    await bulkExportChats.mutateAsync({ chatIds: Array.from(selectedChatIds) });
+    exitMultiSelect();
+  }, [selectedChatIds, bulkExportChats, exitMultiSelect]);
 
   const handleBatchMoveToFolder = useCallback(
     (folderId: string | null) => {
@@ -1134,6 +1148,14 @@ export function ChatSidebar() {
                 Move
               </button>
             )}
+            <button
+              onClick={() => void handleBatchExport()}
+              disabled={selectedChatIds.size === 0 || bulkExportChats.isPending}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs font-medium transition-all hover:bg-[var(--accent)] disabled:opacity-40"
+            >
+              <Download size="0.75rem" />
+              Export
+            </button>
             <button
               onClick={handleBatchDelete}
               disabled={selectedChatIds.size === 0}

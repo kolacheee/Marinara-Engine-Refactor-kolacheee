@@ -5,7 +5,7 @@ import { Film, ArrowRight, ArrowLeft, Trash2, ArrowRightLeft } from "lucide-reac
 import { useState } from "react";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { showConfirmDialog } from "../../../shared/lib/app-dialogs";
-import type { SceneForkMode } from "@marinara-engine/shared";
+import type { SceneForkMode } from "../../../engine/contracts/types/scene";
 
 interface SceneBannerProps {
   /** "origin" = the conversation has an active scene; "scene" = we ARE the scene chat */

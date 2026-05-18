@@ -1,9 +1,13 @@
 use super::shared::ParsedPath;
 use super::*;
 
+#[path = "integrations/haptic.rs"]
 mod haptic;
+#[path = "integrations/spotify.rs"]
 mod spotify;
+#[path = "integrations/spotify_callback.rs"]
 mod spotify_callback;
+#[path = "integrations/tts.rs"]
 mod tts;
 
 pub(crate) async fn tts_call(

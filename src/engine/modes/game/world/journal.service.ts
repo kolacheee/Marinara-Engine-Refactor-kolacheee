@@ -1,11 +1,4 @@
-// ──────────────────────────────────────────────
-// Game: Auto-Journal Service
-//
-// Builds a structured journal from committed game
-// state snapshots — no LLM summarization needed.
-// ──────────────────────────────────────────────
-
-import type { GameNpc, SessionSummary, GameMap } from "@marinara-engine/shared";
+import type { GameNpc, SessionSummary, GameMap } from "../../../contracts/types/game";
 
 // ── Types ──
 

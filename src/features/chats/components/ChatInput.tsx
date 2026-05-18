@@ -24,7 +24,8 @@ import { useGenerate } from "../../generation/hooks/use-generate";
 import { useApplyRegex } from "../../../shared/hooks/use-apply-regex";
 import { useCreateMessage, useDeleteMessage, useUpdateMessageExtra, chatKeys } from "../../chats/hooks/use-chats";
 import { characterKeys } from "../../characters/hooks/use-characters";
-import { buildGuidedGenerationInstructionMessage, type Message } from "@marinara-engine/shared";
+import type { Message } from "../../../engine/contracts/types/chat";
+import { buildGuidedGenerationInstructionMessage } from "../../../engine/shared/text/generation-guide";
 import {
   matchSlashCommand,
   getSlashCompletions,

@@ -11,7 +11,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { BUILT_IN_AGENTS, type Message } from "@marinara-engine/shared";
+import { BUILT_IN_AGENTS } from "../../../engine/contracts/types/agent";
+import type { Message } from "../../../engine/contracts/types/chat";
 import { useUpdateAgentRunData, type AgentConfigRow, type AgentRunRow } from "../../agents/hooks/use-agents";
 import {
   formatAgentFailureDetail,

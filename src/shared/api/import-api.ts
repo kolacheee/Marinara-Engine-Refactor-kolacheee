@@ -22,7 +22,7 @@ export async function importFile<T>(path: string, payload: ImportFilePayload | F
 
 export const importApi = {
   marinara: <T>(envelope: unknown) => importJson<T>("/import/marinara", envelope),
-  marinaraPackage: <T>(file: File) => importFile<T>("/import/marinara-package", file),
+  marinaraFile: <T>(file: File) => importFile<T>("/import/marinara-file", file),
   stCharacterJson: <T>(payload: unknown) => importJson<T>("/import/st-character", payload),
   stCharacterFile: <T>(payload: ImportFilePayload) => importFile<T>("/import/st-character", payload),
   stChat: <T>(file: File) => importFile<T>("/import/st-chat", file),

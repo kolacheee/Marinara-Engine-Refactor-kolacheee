@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { GenerationParameters } from "@marinara-engine/shared";
+import type { GenerationParameters } from "../../../engine/contracts/types/prompt";
 import { cn } from "../../lib/utils";
 import { HelpTooltip } from "./HelpTooltip";
 

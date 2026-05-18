@@ -1,4 +1,4 @@
-import type { TTSConfig } from "@marinara-engine/shared";
+import type { TTSConfig } from "../../engine/contracts/types/tts";
 import { DIALOGUE_QUOTE_CAPTURE_GROUP_PATTERN_SOURCE, stripSurroundingDialogueQuotes } from "./dialogue-quotes";
 
 export interface TTSUtterance {

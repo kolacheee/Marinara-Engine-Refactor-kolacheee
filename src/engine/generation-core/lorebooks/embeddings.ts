@@ -1,4 +1,4 @@
-import type { LorebookEntry } from "@marinara-engine/shared";
+import type { LorebookEntry } from "../../contracts/types/lorebook";
 
 export interface LorebookEmbeddingOptions {
   chatEmbedding?: number[] | null;

@@ -2,7 +2,6 @@ use super::admin::*;
 use super::agents::*;
 use super::avatars::*;
 use super::backgrounds::*;
-use super::backup::*;
 use super::bot_browser::*;
 use super::characters::*;
 use super::chat_presets::*;
@@ -20,10 +19,12 @@ use super::knowledge::*;
 use super::llm::*;
 use super::lorebook_images::*;
 use super::prompts::*;
+use super::profile::*;
 use super::shared::*;
 use super::sprites::*;
 use super::translation::*;
 use super::*;
+use tauri::ipc::Channel;
 
 pub(crate) async fn stream_events(
     state: &AppState,
@@ -33,13 +34,33 @@ pub(crate) async fn stream_events(
     let route = ParsedPath::new(&path);
     let parts: Vec<&str> = route.parts.iter().map(String::as_str).collect();
     match parts.as_slice() {
-        ["generate"] => generate_events(state, body.unwrap_or(Value::Null)).await,
         ["llm", "stream"] => llm_stream_events(state, body.unwrap_or(Value::Null)).await,
         ["import", rest @ ..] => import_stream_events(state, rest, body.unwrap_or(Value::Null)),
         _ => Err(AppError::new(
             "stream_not_supported",
             format!("Streaming is not supported for {path}"),
         )),
+    }
+}
+
+pub(crate) async fn stream_events_channel(
+    state: &AppState,
+    path: String,
+    body: Option<Value>,
+    on_event: Channel<Value>,
+) -> AppResult<()> {
+    let route = ParsedPath::new(&path);
+    let parts: Vec<&str> = route.parts.iter().map(String::as_str).collect();
+    match parts.as_slice() {
+        ["llm", "stream"] => super::llm::llm_stream_channel(state, body.unwrap_or(Value::Null), on_event).await,
+        _ => {
+            for event in stream_events(state, path, body).await? {
+                on_event
+                    .send(event)
+                    .map_err(|error| AppError::new("stream_channel_error", error.to_string()))?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -56,15 +77,8 @@ pub(crate) async fn route_request(
         ["health"] => Ok(
             json!({ "ok": true, "runtime": "tauri", "dataDir": state.data_dir.to_string_lossy() }),
         ),
-        ["backup", rest @ ..] => backup_call(state, method, rest, &route, body),
-        ["updates", "check"] if method == "GET" => marinara_updates::check_updates(),
-        ["updates", "apply"] if method == "POST" => Ok(json!({
-            "applied": false,
-            "status": "apply_unavailable",
-            "message": "This desktop build can check update metadata. Applying updates is handled by the packaged desktop updater or release installer.",
-            "applyUnavailableReason": "unsupported-install"
-        })),
-        ["llm", "complete"] if method == "POST" => llm_complete(state, body).await,
+        ["profile", rest @ ..] => profile_call(state, method, rest, &route, body),
+        ["llm", "complete"] if method == "POST" => super::llm::llm_complete(state, body).await,
         ["llm", "models"] if method == "GET" => {
             llm_models(state, route.query.get("connectionId").map(String::as_str)).await
         }
@@ -73,7 +87,6 @@ pub(crate) async fn route_request(
         ["translate"] if method == "POST" => translate_text(state, body).await,
         ["backgrounds", rest @ ..] => backgrounds_call(state, method, rest, body),
         ["avatars", "npc", chat_id] if method == "POST" => update_npc_avatar(state, chat_id, body),
-        ["generate", "abort"] if method == "POST" => abort_generation(state, body),
         ["gifs", "search"] if method == "GET" => gifs_search(&route).await,
         ["knowledge-sources", rest @ ..] => knowledge_sources_call(state, method, rest, body),
         ["bot-browser", rest @ ..] => bot_browser_call(state, method, rest, &route, body).await,
@@ -226,9 +239,6 @@ pub(crate) async fn route_request(
         ["chats", chat_id, "summaries"] if method == "PATCH" => {
             patch_chat_object_field(state, chat_id, "metadata", body)
         }
-        ["chats", chat_id, "generate-summary"] if method == "POST" => {
-            generate_summary(state, chat_id, body)
-        }
         ["chats", chat_id, "autonomous-unread"] if method == "POST" => {
             mark_autonomous_unread(state, chat_id, body)
         }
@@ -240,6 +250,12 @@ pub(crate) async fn route_request(
         }
         ["chats", chat_id, "memories"] if method == "DELETE" => {
             set_chat_array_field(state, chat_id, "memories", Vec::new())
+        }
+        ["chats", chat_id, "memories", "export"] if method == "GET" => {
+            export_chat_memories(state, chat_id)
+        }
+        ["chats", chat_id, "memories", "import"] if method == "POST" => {
+            import_chat_memories(state, chat_id, body)
         }
         ["chats", chat_id, "memories", "refresh"] if method == "POST" => {
             refresh_chat_memories(state, chat_id)
@@ -316,9 +332,6 @@ pub(crate) async fn route_request(
         ["connections", id, "models"] if method == "GET" => connection_models(state, id).await,
         ["connections", id, "test"] if method == "POST" => test_connection(state, id).await,
         ["connections", id, "test-message"] if method == "POST" => test_message(state, id).await,
-        ["connections", id, "diagnose-claude-subscription"] if method == "POST" => {
-            diagnose_claude_subscription(state, id)
-        }
         ["connections", id, "test-image"] if method == "POST" => {
             test_image_generation(state, id).await
         }
@@ -518,6 +531,7 @@ pub(crate) async fn route_request(
         ["game-assets", "rescan"] if method == "POST" => game_assets_rescan(state),
         ["game-assets", "open-folder"] if method == "POST" => game_assets_open_folder(state, body),
         ["sprites", "capabilities"] if method == "GET" => sprite_capabilities(),
+        ["sprites", "cleanup", "status"] if method == "GET" => sprite_cleanup_status(),
         ["sprites", "generate-sheet", "preview"] if method == "POST" => {
             generate_sprite_sheet_preview(state, body).await
         }
@@ -526,13 +540,16 @@ pub(crate) async fn route_request(
         }
         ["sprites", "cleanup"] if method == "POST" => cleanup_generated_sprites(body),
         ["sprites", character_id, "cleanup-saved"] if method == "POST" => {
-            cleanup_saved_sprites(state, character_id, body)
+            clean_saved_sprites(state, character_id, body)
         }
         ["sprites", character_id, "cleanup-restore"] if method == "POST" => {
-            restore_sprite_cleanup(state, character_id, body)
+            restore_sprite_cleanup_point(state, character_id, body)
         }
         ["sprites", character_id] if method == "GET" => list_sprites(state, character_id),
         ["sprites", character_id] if method == "POST" => upload_sprite(state, character_id, body),
+        ["sprites", character_id, "file", filename] if method == "GET" => {
+            sprite_file(state, character_id, filename)
+        }
         ["sprites", character_id, expression] if method == "DELETE" => {
             delete_sprite(state, character_id, expression)
         }

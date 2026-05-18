@@ -4,7 +4,7 @@ use super::super::*;
 use super::spotify_callback::start_callback_listener;
 
 const SPOTIFY_SCOPES: &str = "streaming user-modify-playback-state user-read-playback-state user-read-currently-playing user-read-private playlist-read-private playlist-modify-public playlist-modify-private user-library-read";
-const SPOTIFY_REDIRECT_URI: &str = "http://127.0.0.1:7860/api/spotify/callback";
+const SPOTIFY_REDIRECT_URI: &str = "http://127.0.0.1:8754/spotify/callback";
 const AUTH_TTL_MS: u128 = 10 * 60_000;
 
 pub(crate) async fn spotify_call(
@@ -29,6 +29,7 @@ pub(crate) async fn spotify_call(
         ("GET", ["player"]) => player(state, route, &body).await,
         ("GET", ["devices"]) => devices(state, route, &body).await,
         ("GET", ["playlists"]) => playlists(state, route, &body).await,
+        ("POST", ["playlist-tracks"]) => playlist_tracks(state, body).await,
         ("POST", ["search-tracks"]) => search_tracks(state, body).await,
         ("POST", ["play-track"]) => play_track(state, body).await,
         ("POST", ["dj-mari-playlist"]) => dj_mari_playlist(state, body).await,
@@ -73,53 +74,27 @@ async fn search_tracks(state: &AppState, body: Value) -> AppResult<Value> {
             items
                 .iter()
                 .filter_map(Value::as_str)
-                .filter(|uri| uri.starts_with("spotify:track:"))
-                .map(ToOwned::to_owned)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-    match game_spotify_candidates(state, query, limit, &recent).await {
-        Ok(value) => Ok(value),
-        Err(error) if error.code == "not_found" || error.code == "invalid_input" => Ok(json!({
-            "enabled": false,
-            "tracks": [],
-            "error": error.message
-        })),
-        Err(error) => Err(error),
-    }
-}
-
-async fn play_track(state: &AppState, body: Value) -> AppResult<Value> {
-    let track = body
-        .get("track")
-        .ok_or_else(|| AppError::invalid_input("track is required"))?;
-    let device_id = body.get("deviceId").and_then(Value::as_str);
-    game_spotify_play(state, track, device_id).await
-}
-
-pub(crate) async fn game_spotify_candidates(
-    state: &AppState,
-    query: &str,
-    limit: u32,
-    recent_track_uris: &[String],
-) -> AppResult<Value> {
+        .filter(|uri| uri.starts_with("spotify:track:"))
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>()
+    })
+    .unwrap_or_default();
     let route = ParsedPath::new("");
-    let body = Value::Null;
     let credentials = resolve_credentials(state, &route, &body).await?;
     let params = form_urlencoded(&[
         ("q", query),
         ("type", "track"),
-        ("limit", &limit.clamp(1, 50).to_string()),
+        ("limit", &limit.to_string()),
     ]);
     let response = spotify_api(&credentials, &format!("/search?{params}"), "GET", None).await?;
     if !(200..300).contains(&response.status) {
         return Err(AppError::with_details(
             "spotify_api_error",
-            "Spotify scene music search failed",
+            "Spotify track search failed",
             json!({ "status": response.status, "body": response.body }),
         ));
     }
-    let recent = recent_track_uris
+    let recent = recent
         .iter()
         .map(|uri| uri.as_str())
         .collect::<std::collections::HashSet<_>>();
@@ -156,6 +131,67 @@ pub(crate) async fn game_spotify_candidates(
         "tracks": tracks,
         "candidateMode": "spotify_search",
         "source": "spotify"
+    }))
+}
+
+async fn play_track(state: &AppState, body: Value) -> AppResult<Value> {
+    let track = body
+        .get("track")
+        .ok_or_else(|| AppError::invalid_input("track is required"))?;
+    let device_id = body.get("deviceId").and_then(Value::as_str);
+    game_spotify_play(state, track, device_id).await
+}
+
+async fn playlist_tracks(state: &AppState, body: Value) -> AppResult<Value> {
+    let playlist_id = body
+        .get("playlistId")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError::invalid_input("playlistId is required"))?;
+    let limit = body
+        .get("limit")
+        .and_then(Value::as_u64)
+        .unwrap_or(50)
+        .clamp(1, 50) as u32;
+    let offset = body
+        .get("offset")
+        .and_then(Value::as_u64)
+        .unwrap_or(0)
+        .min(10_000) as u32;
+    let route = ParsedPath::new("");
+    let credentials = resolve_credentials(state, &route, &body).await?;
+    let path = if playlist_id == "liked" {
+        format!("/me/tracks?limit={limit}&offset={offset}")
+    } else {
+        format!(
+            "/playlists/{}/tracks?limit={limit}&offset={offset}",
+            percent_encode_component(playlist_id)
+        )
+    };
+    let response = spotify_api(&credentials, &path, "GET", None).await?;
+    if !(200..300).contains(&response.status) {
+        return Err(AppError::with_details(
+            "spotify_api_error",
+            "Spotify playlist tracks failed",
+            json!({ "status": response.status, "body": response.body }),
+        ));
+    }
+    let tracks = response
+        .json
+        .get("items")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|item| item.get("track").cloned().or(Some(item)))
+        .filter_map(|track| map_track_candidate(track))
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "tracks": tracks,
+        "next": response.json.get("next").cloned().unwrap_or(Value::Null),
+        "total": response.json.get("total").cloned().unwrap_or(Value::Null),
+        "offset": offset,
+        "limit": limit
     }))
 }
 

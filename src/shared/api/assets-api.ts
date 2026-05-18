@@ -1,4 +1,4 @@
-import type { AssetGateway } from "../../engine/capabilities";
+import type { AssetGateway } from "../../engine/capabilities/assets";
 import { invokeTauri } from "./tauri-client";
 
 export const assetsApi: AssetGateway = {

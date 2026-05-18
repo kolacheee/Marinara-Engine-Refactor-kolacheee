@@ -1,4 +1,5 @@
-import type { LlmGateway, StorageGateway } from "../capabilities";
+import type { LlmGateway } from "../capabilities/llm";
+import type { StorageGateway } from "../capabilities/storage";
 
 export type PromptReviewInput = {
   presetId: string;

@@ -1,8 +1,4 @@
-// ──────────────────────────────────────────────
-// Game: Dice Rolling Service
-// ──────────────────────────────────────────────
-
-import type { DiceRollResult } from "@marinara-engine/shared";
+import type { DiceRollResult } from "../../../contracts/types/game";
 
 export const DICE_NOTATION_REGEX = /^(\d+)?d(\d+)([+-]\d+)?$/i;
 

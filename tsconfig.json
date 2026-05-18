@@ -16,8 +16,7 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@marinara-engine/shared": ["src/engine/contracts/index.ts"]
+      "@/*": ["src/*"]
     },
 
     /* Linting */

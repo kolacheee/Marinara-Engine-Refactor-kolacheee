@@ -45,8 +45,6 @@ export interface PresentCharacter {
   name: string;
   emoji: string;
   mood: string;
-  /** @deprecated No longer tracked — kept for backward compat */
-  action?: string;
   /** Brief physical appearance description */
   appearance: string | null;
   /** Current clothing / outfit description */

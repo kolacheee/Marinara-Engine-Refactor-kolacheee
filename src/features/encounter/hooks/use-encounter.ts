@@ -3,17 +3,17 @@
 // ──────────────────────────────────────────────
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { initRoleplayEncounter, resolveRoleplayEncounterAction, summarizeRoleplayEncounter } from "../../../engine/modes/roleplay/encounter";
+import {
+  initRoleplayEncounter,
+  resolveRoleplayEncounterAction,
+  summarizeRoleplayEncounter,
+} from "../../../engine/modes/roleplay/encounter/encounter-service";
 import { llmApi } from "../../../shared/api/llm-api";
 import { storageApi } from "../../../shared/api/storage-api";
 import { useEncounterStore } from "../../../shared/stores/encounter.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { chatKeys } from "../../chats/hooks/use-chats";
-import type {
-  EncounterSettings,
-  CombatPartyMember,
-  CombatEnemy,
-} from "@marinara-engine/shared";
+import type { EncounterSettings, CombatPartyMember, CombatEnemy } from "../../../engine/contracts/types/combat-encounter";
 
 /** Ensure each party member has all required numeric/string fields so components don't crash. */
 function sanitizeParty(arr: unknown[], fallback: CombatPartyMember[]): CombatPartyMember[] {

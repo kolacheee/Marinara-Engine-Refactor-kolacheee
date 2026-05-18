@@ -12,10 +12,8 @@ import {
   useTestConnection,
   useTestMessage,
   useTestImageGeneration,
-  useDiagnoseClaudeSubscription,
   useFetchModels,
   useSaveConnectionDefaults,
-  type ClaudeSubscriptionDiagnosis,
 } from "../hooks/use-connections";
 import { usePresets } from "../../presets/hooks/use-presets";
 import {
@@ -54,27 +52,11 @@ import {
   parseEditableGenerationParameters,
   type EditableGenerationParameters,
 } from "../../../shared/components/ui/GenerationParametersEditor";
-import {
-  PROVIDERS,
-  MODEL_LISTS,
-  isTauriRuntimeProvider,
-  IMAGE_GENERATION_SOURCES,
-  inferImageSource,
-  IMAGE_DEFAULTS_STORAGE_KEY,
-  COMFYUI_SAMPLER_OPTIONS,
-  COMFYUI_SCHEDULER_OPTIONS,
-  NOVELAI_NOISE_SCHEDULE_OPTIONS,
-  NOVELAI_SAMPLER_OPTIONS,
-  SD_WEBUI_SAMPLER_OPTIONS,
-  SD_WEBUI_SCHEDULER_OPTIONS,
-  createDefaultImageGenerationProfile,
-  imageSourceToDefaultsService,
-  normalizeImageGenerationProfile,
-  sanitizeImageGenerationProfile,
-  type APIProvider,
-  type ImageDefaultsService,
-  type ImageGenerationDefaultsProfile,
-} from "@marinara-engine/shared";
+import { IMAGE_DEFAULTS_STORAGE_KEY, COMFYUI_SAMPLER_OPTIONS, COMFYUI_SCHEDULER_OPTIONS, NOVELAI_NOISE_SCHEDULE_OPTIONS, NOVELAI_SAMPLER_OPTIONS, SD_WEBUI_SAMPLER_OPTIONS, SD_WEBUI_SCHEDULER_OPTIONS, createDefaultImageGenerationProfile, imageSourceToDefaultsService, normalizeImageGenerationProfile, sanitizeImageGenerationProfile } from "../../../engine/contracts/constants/image-generation-defaults";
+import { MODEL_LISTS, IMAGE_GENERATION_SOURCES, inferImageSource } from "../../../engine/contracts/constants/model-lists";
+import { PROVIDERS, isTauriRuntimeProvider } from "../../../engine/contracts/constants/providers";
+import type { APIProvider } from "../../../engine/contracts/types/connection";
+import type { ImageDefaultsService, ImageGenerationDefaultsProfile } from "../../../engine/contracts/types/image-generation-defaults";
 
 /** Links where users can obtain API keys for each provider */
 const API_KEY_LINKS: Partial<Record<APIProvider, { label: string; url: string }>> = {
@@ -118,7 +100,6 @@ export function ConnectionEditor() {
   const testConnection = useTestConnection();
   const testMessage = useTestMessage();
   const testImageGeneration = useTestImageGeneration();
-  const diagnoseClaudeSubscription = useDiagnoseClaudeSubscription();
   const fetchModels = useFetchModels();
   const saveConnectionDefaults = useSaveConnectionDefaults();
   const { data: allConnections } = useConnections();
@@ -154,7 +135,6 @@ export function ConnectionEditor() {
   const [localImageEndpointId, setLocalImageEndpointId] = useState("");
   const [localImageService, setLocalImageService] = useState<string | null>(null);
   const [localMaxTokensOverride, setLocalMaxTokensOverride] = useState<number | null>(null);
-  const [localClaudeFastMode, setLocalClaudeFastMode] = useState(false);
   const [localDefaultParametersEnabled, setLocalDefaultParametersEnabled] = useState(false);
   const [localDefaultParameters, setLocalDefaultParameters] =
     useState<EditableGenerationParameters>(ROLEPLAY_PARAMETER_DEFAULTS);
@@ -177,7 +157,6 @@ export function ConnectionEditor() {
     prompt: string;
     error?: string;
   } | null>(null);
-  const [claudeDiagResult, setClaudeDiagResult] = useState<ClaudeSubscriptionDiagnosis | null>(null);
 
   // Model search
   const [modelSearch, setModelSearch] = useState("");
@@ -264,7 +243,6 @@ export function ConnectionEditor() {
     setLocalImageEndpointId((c.imageEndpointId as string) ?? "");
     setLocalImageService(imageService);
     setLocalMaxTokensOverride(typeof c.maxTokensOverride === "number" ? (c.maxTokensOverride as number) : null);
-    setLocalClaudeFastMode(c.claudeFastMode === "true" || c.claudeFastMode === true);
     setLocalDefaultParametersEnabled(!!parseEditableGenerationParameters(c.defaultParameters));
     setLocalDefaultParameters(getEditableGenerationParameters(ROLEPLAY_PARAMETER_DEFAULTS, c.defaultParameters));
     setLocalImageDefaults(
@@ -276,7 +254,6 @@ export function ConnectionEditor() {
     setTestResult(null);
     setMsgResult(null);
     setImgTestResult(null);
-    setClaudeDiagResult(null);
   }, [conn]);
 
   const comfyWorkflowValidation = useMemo(() => {
@@ -408,7 +385,6 @@ export function ConnectionEditor() {
       imageService:
         localProvider === "image_generation" ? localImageGenerationSource || localImageService || null : null,
       maxTokensOverride: localMaxTokensOverride ?? null,
-      claudeFastMode: localClaudeFastMode,
     };
     // Only send API key if user typed a new one
     if (localApiKey.trim()) {
@@ -462,7 +438,6 @@ export function ConnectionEditor() {
     localImageEndpointId,
     localImageService,
     localMaxTokensOverride,
-    localClaudeFastMode,
     localDefaultParametersEnabled,
     localDefaultParameters,
     selectedImageDefaultsService,
@@ -527,33 +502,6 @@ export function ConnectionEditor() {
         }),
     });
   }, [connectionDetailId, dirty, handleSave, testMessage]);
-
-  const handleDiagnoseClaudeSubscription = useCallback(async () => {
-    if (!connectionDetailId) return;
-    if (dirty) {
-      try {
-        await handleSave();
-      } catch {
-        return;
-      }
-    }
-    setClaudeDiagResult(null);
-    diagnoseClaudeSubscription.mutate(connectionDetailId, {
-      onSuccess: (data) => setClaudeDiagResult(data),
-      onError: (err) =>
-        setClaudeDiagResult({
-          success: false,
-          requestedModel: localModel,
-          modelsBilled: [],
-          modelUsageDetail: [],
-          billedDifferent: false,
-          fastModeState: null,
-          response: "",
-          errors: [err instanceof Error ? err.message : "Failed"],
-          latencyMs: 0,
-        }),
-    });
-  }, [connectionDetailId, dirty, handleSave, diagnoseClaudeSubscription, localModel]);
 
   const handleTestImage = useCallback(async () => {
     if (!connectionDetailId) return;
@@ -643,9 +591,6 @@ export function ConnectionEditor() {
     [localProvider],
   );
   const isImageGenerationProvider = localProvider === "image_generation";
-  const isClaudeSubscriptionProvider = localProvider === "claude_subscription";
-  const isOpenAIChatGPTProvider = localProvider === "openai_chatgpt";
-  const isLocalAuthProvider = isClaudeSubscriptionProvider || isOpenAIChatGPTProvider;
 
   if (!connectionDetailId) return null;
 
@@ -802,11 +747,6 @@ export function ConnectionEditor() {
                     if (key === "xai" && defaultModel?.context) {
                       setLocalMaxContext(defaultModel.context);
                     }
-                    // Local subscription/session providers ignore the API key
-                    // field, so clear stale keys from other providers.
-                    if (key === "claude_subscription" || key === "openai_chatgpt") {
-                      setLocalApiKey("");
-                    }
                     markDirty();
                   }}
                   className={cn(
@@ -821,59 +761,6 @@ export function ConnectionEditor() {
               ))}
             </div>
           </FieldGroup>
-
-          {/* ── Claude (Subscription) — prerequisites notice ── */}
-          {localProvider === "claude_subscription" && (
-            <div className="rounded-xl bg-sky-400/5 px-3 py-2.5 ring-1 ring-sky-400/30">
-              <p className="flex items-start gap-1.5 text-[0.6875rem] text-sky-300">
-                <AlertCircle size="0.75rem" className="mt-px shrink-0" />
-                <span>
-                  Routes chat through your local <strong>Claude Code</strong> install so it bills against your Anthropic{" "}
-                  <strong>Pro / Max</strong> subscription instead of an API key. Prerequisites on the Marinara host:
-                </span>
-              </p>
-              <ol className="mt-1.5 ml-4 list-decimal space-y-0.5 text-[0.625rem] text-[var(--muted-foreground)]">
-                <li>
-                  Install Claude Code:{" "}
-                  <code className="rounded bg-[var(--secondary)] px-1">npm i -g @anthropic-ai/claude-code</code>
-                </li>
-                <li>
-                  Sign in once: <code className="rounded bg-[var(--secondary)] px-1">claude login</code>
-                </li>
-                <li>API Key and Base URL are not required — leave them blank.</li>
-              </ol>
-              <p className="mt-1.5 text-[0.625rem] text-[var(--muted-foreground)]">
-                Subscription auth is the same mechanism Visual Studio Code and other Anthropic-endorsed IDE integrations
-                use. Embeddings are not available on this provider; configure a separate connection for embedding work.
-              </p>
-            </div>
-          )}
-
-          {/* ── OpenAI (ChatGPT) — prerequisites notice ── */}
-          {isOpenAIChatGPTProvider && (
-            <div className="rounded-xl bg-sky-400/5 px-3 py-2.5 ring-1 ring-sky-400/30">
-              <p className="flex items-start gap-1.5 text-[0.6875rem] text-sky-300">
-                <AlertCircle size="0.75rem" className="mt-px shrink-0" />
-                <span>
-                  Routes chat through your local <strong>Codex ChatGPT</strong> login so it uses your ChatGPT account
-                  instead of an OpenAI API key. Prerequisites on the Marinara host:
-                </span>
-              </p>
-              <ol className="mt-1.5 ml-4 list-decimal space-y-0.5 text-[0.625rem] text-[var(--muted-foreground)]">
-                <li>
-                  Install Codex CLI: <code className="rounded bg-[var(--secondary)] px-1">npm i -g @openai/codex</code>
-                </li>
-                <li>
-                  Sign in once: <code className="rounded bg-[var(--secondary)] px-1">codex login</code>
-                </li>
-                <li>API Key and Base URL are not required - leave them blank.</li>
-              </ol>
-              <p className="mt-1.5 text-[0.625rem] text-[var(--muted-foreground)]">
-                Marinara reads the local Codex auth file and refreshes the ChatGPT session when possible. Embeddings are
-                not available on this provider; configure a separate connection for embedding work.
-              </p>
-            </div>
-          )}
 
           {/* ── OpenRouter Provider Preference ── */}
           {localProvider === "openrouter" && (
@@ -920,21 +807,12 @@ export function ConnectionEditor() {
               }}
               type="password"
               className="w-full rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-sm ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-70"
-              placeholder={
-                isClaudeSubscriptionProvider
-                  ? "Not used — managed by the Claude Agent SDK"
-                  : isOpenAIChatGPTProvider
-                    ? "Not used - read from local Codex ChatGPT login"
-                    : "••••••••  (leave empty to keep existing key)"
-              }
-              disabled={isLocalAuthProvider}
+              placeholder="••••••••  (leave empty to keep existing key)"
             />
-            {!isLocalAuthProvider && (
-              <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
-                Your key is encrypted at rest. Leave blank when editing to keep the existing key.
-              </p>
-            )}
-            {!isLocalAuthProvider && API_KEY_LINKS[localProvider] && (
+            <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
+              Your key is encrypted at rest. Leave blank when editing to keep the existing key.
+            </p>
+            {API_KEY_LINKS[localProvider] && (
               <a
                 href={API_KEY_LINKS[localProvider]!.url}
                 target="_blank"
@@ -949,18 +827,6 @@ export function ConnectionEditor() {
               <p className="mt-1.5 text-[0.625rem] text-[var(--muted-foreground)]">
                 For local models (Ollama, LM Studio, KoboldCpp, etc.) you can leave this empty — just set the Base URL
                 below.
-              </p>
-            )}
-            {localProvider === "claude_subscription" && (
-              <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
-                Authentication is read from your local{" "}
-                <code className="rounded bg-[var(--secondary)] px-1">claude</code> CLI session.
-              </p>
-            )}
-            {isOpenAIChatGPTProvider && (
-              <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
-                Authentication is read from your local{" "}
-                <code className="rounded bg-[var(--secondary)] px-1">codex login</code> session.
               </p>
             )}
           </FieldGroup>
@@ -978,29 +844,11 @@ export function ConnectionEditor() {
                 markDirty();
               }}
               className="w-full rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-sm font-mono ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-70"
-              placeholder={
-                isClaudeSubscriptionProvider
-                  ? "Not used — managed by the Claude Agent SDK"
-                  : isOpenAIChatGPTProvider
-                    ? "Not used - ChatGPT Codex endpoint is selected automatically"
-                    : providerDef?.defaultBaseUrl || "https://api.example.com/v1"
-              }
-              disabled={isLocalAuthProvider}
+              placeholder={providerDef?.defaultBaseUrl || "https://api.example.com/v1"}
             />
-            {providerDef?.defaultBaseUrl && !localBaseUrl && !isLocalAuthProvider && (
+            {providerDef?.defaultBaseUrl && !localBaseUrl && (
               <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
                 Default: {providerDef.defaultBaseUrl}
-              </p>
-            )}
-            {localProvider === "claude_subscription" && (
-              <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
-                The Claude Agent SDK selects the endpoint automatically based on your local{" "}
-                <code className="rounded bg-[var(--secondary)] px-1">claude</code> CLI auth.
-              </p>
-            )}
-            {isOpenAIChatGPTProvider && (
-              <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
-                Marinara sends requests to the ChatGPT Codex endpoint automatically using your local Codex auth.
               </p>
             )}
             {localProvider === "custom" && (
@@ -1011,15 +859,13 @@ export function ConnectionEditor() {
                 <code className="rounded bg-[var(--secondary)] px-1">http://localhost:5001/v1</code>
               </p>
             )}
-            {!isLocalAuthProvider && (
-              <p className="mt-1.5 flex items-start gap-1 text-[0.625rem] text-amber-400/80">
-                <AlertCircle size="0.625rem" className="mt-px shrink-0" />
-                <span>
-                  Only use URLs from providers you trust. A malicious endpoint could intercept your messages and API
-                  keys.
-                </span>
-              </p>
-            )}
+            <p className="mt-1.5 flex items-start gap-1 text-[0.625rem] text-amber-400/80">
+              <AlertCircle size="0.625rem" className="mt-px shrink-0" />
+              <span>
+                Only use URLs from providers you trust. A malicious endpoint could intercept your messages and API
+                keys.
+              </span>
+            </p>
             {localProvider === "custom" && (
               <p className="mt-1.5 flex items-start gap-1 text-[0.625rem] text-sky-400/80">
                 <AlertCircle size="0.625rem" className="mt-px shrink-0" />
@@ -1463,7 +1309,7 @@ export function ConnectionEditor() {
           )}
 
           {/* ── Max Output Tokens Override ── */}
-          {localProvider !== "image_generation" && !isLocalAuthProvider && (
+          {localProvider !== "image_generation" && (
             <FieldGroup
               label="Max Output Tokens Override"
               icon={<Zap size="0.875rem" className="text-amber-400" />}
@@ -1685,59 +1531,8 @@ export function ConnectionEditor() {
             )}
           </FieldGroup>
 
-          {/* ── Claude (Subscription) — Fast Mode toggle ── */}
-          {localProvider === "claude_subscription" && (
-            <FieldGroup
-              label="Fast Mode"
-              icon={<Zap size="0.875rem" className="text-amber-400" />}
-              help="When enabled, asks the Claude Agent SDK to use its faster routing tier — quicker responses but the SDK may use a smaller model behind the scenes (Sonnet/Haiku) even if you've selected Opus. Currently a no-op on every modern Claude model: Opus 4.7 has no faster variant to route to, and Anthropic dropped support for downgrading on the rest. The toggle is here for the day Anthropic re-enables it. Leave off."
-            >
-              <label className="flex items-start gap-3 rounded-xl bg-[var(--secondary)] px-3 py-2.5 ring-1 ring-[var(--border)]">
-                <input
-                  type="checkbox"
-                  checked={localClaudeFastMode}
-                  onChange={async (e) => {
-                    const next = e.target.checked;
-                    if (next) {
-                      const confirmed = await showConfirmDialog({
-                        title: "YOU DON'T WANT THIS SETTING ON!",
-                        message:
-                          "Fast mode is effectively a dead feature today — Claude/Anthropic removed support for downgrading current models, and Opus 4.7 has no faster variant for the SDK to route to. Turning this on does nothing useful for roleplay quality and may add overhead. The toggle exists only so we don't have to ship a new release if Anthropic re-enables it.\n\nAre you absolutely sure you want to enable it?",
-                        confirmLabel: "Enable anyway",
-                        cancelLabel: "Keep it off",
-                        tone: "destructive",
-                      });
-                      if (!confirmed) return;
-                    }
-                    setLocalClaudeFastMode(next);
-                    markDirty();
-                  }}
-                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-amber-400"
-                />
-                <div className="min-w-0 flex-1 text-[0.6875rem] leading-relaxed">
-                  <div className="font-medium text-[var(--foreground)]">Use Claude Code fast-mode routing</div>
-                  <p className="mt-0.5 text-[var(--muted-foreground)]">
-                    <strong className="text-amber-400">99% of users should leave this off.</strong> Fast mode is
-                    effectively a dead feature today — Claude/Anthropic removed support for downgrading current models,
-                    and Opus 4.7 has no faster variant to route to. Turning it on does nothing useful for roleplay
-                    quality and may add overhead. The toggle exists only so we don&apos;t have to ship a new release if
-                    Anthropic re-enables it. Leave off until that happens.
-                  </p>
-                  <p className="mt-1.5 flex items-start gap-1 text-[var(--muted-foreground)]">
-                    <AlertCircle size="0.625rem" className="mt-px shrink-0 text-amber-400" />
-                    <span>
-                      <strong className="text-amber-400">Doesn&apos;t work on Claude Opus 4.7 yet.</strong> There is no
-                      faster Opus 4.7 variant for the SDK to route to, so this toggle is a no-op when Opus 4.7 is the
-                      selected model.
-                    </span>
-                  </p>
-                </div>
-              </label>
-            </FieldGroup>
-          )}
-
           {/* ── Embedding Model (for lorebook vectorization) ── */}
-          {localProvider !== "image_generation" && localProvider !== "claude_subscription" && (
+          {localProvider !== "image_generation" && (
             <FieldGroup
               label="Embedding Model"
               icon={<Server size="0.875rem" className="text-violet-400" />}
@@ -1854,21 +1649,6 @@ export function ConnectionEditor() {
                   Test Image
                 </button>
               )}
-              {localProvider === "claude_subscription" && (
-                <button
-                  onClick={handleDiagnoseClaudeSubscription}
-                  disabled={diagnoseClaudeSubscription.isPending || !localModel}
-                  className="flex items-center gap-1.5 rounded-xl bg-amber-400/10 px-4 py-2.5 text-xs font-medium text-amber-400 ring-1 ring-amber-400/20 transition-all hover:bg-amber-400/20 active:scale-[0.98] disabled:opacity-50"
-                  title="Verify which model the SDK actually bills against (catches silent fast-mode downgrades)"
-                >
-                  {diagnoseClaudeSubscription.isPending ? (
-                    <Loader2 size="0.8125rem" className="animate-spin" />
-                  ) : (
-                    <AlertCircle size="0.8125rem" />
-                  )}
-                  Diagnose Model Routing
-                </button>
-              )}
             </div>
 
             <p className="text-[0.625rem] text-[var(--muted-foreground)]">
@@ -1883,14 +1663,6 @@ export function ConnectionEditor() {
                 <>
                   {" "}
                   <strong>Test Image</strong> generates a 512×512 test image (requires saving first).
-                </>
-              )}
-              {localProvider === "claude_subscription" && (
-                <>
-                  {" "}
-                  <strong>Diagnose Model Routing</strong> sends a real prompt through the Claude Agent SDK and reports
-                  which model it actually billed against. Catches silent fast-mode / cooldown downgrades where you ask
-                  for Opus and quietly get Sonnet.
                 </>
               )}
             </p>
@@ -1932,115 +1704,6 @@ export function ConnectionEditor() {
               </TestResultCard>
             )}
 
-            {/* Claude (Subscription) diagnosis result */}
-            {claudeDiagResult && (
-              <TestResultCard
-                label="Model Routing Diagnosis"
-                success={claudeDiagResult.success && !claudeDiagResult.billedDifferent}
-                latencyMs={claudeDiagResult.latencyMs}
-              >
-                <div className="mt-1.5 space-y-2">
-                  <div className="grid grid-cols-[max-content,1fr] gap-x-3 gap-y-1 text-[0.6875rem]">
-                    <span className="text-[var(--muted-foreground)]">Requested model:</span>
-                    <span className="font-mono">{claudeDiagResult.requestedModel}</span>
-                    <span className="text-[var(--muted-foreground)]">SDK billed against:</span>
-                    <span
-                      className={cn(
-                        "font-mono",
-                        claudeDiagResult.billedDifferent && "font-semibold text-[var(--destructive)]",
-                      )}
-                    >
-                      {(() => {
-                        const detail = claudeDiagResult.modelUsageDetail;
-                        if (detail.length === 0) {
-                          return claudeDiagResult.modelsBilled.length
-                            ? claudeDiagResult.modelsBilled.join(", ")
-                            : "(none reported)";
-                        }
-                        const primary = detail.filter((u) => u.model === claudeDiagResult.requestedModel);
-                        const secondary = detail.filter((u) => u.model !== claudeDiagResult.requestedModel);
-                        return (
-                          <span className="flex flex-col gap-1.5">
-                            {primary.length > 0 && (
-                              <span className="flex flex-col gap-0.5">
-                                <span className="text-[0.5625rem] font-sans uppercase tracking-wide text-emerald-400/80">
-                                  Roleplay generation
-                                </span>
-                                {primary.map((u) => (
-                                  <span key={u.model}>
-                                    {u.model}{" "}
-                                    <span className="text-[var(--muted-foreground)]">
-                                      (in {u.inputTokens}, out {u.outputTokens})
-                                    </span>
-                                  </span>
-                                ))}
-                              </span>
-                            )}
-                            {secondary.length > 0 && (
-                              <span className="flex flex-col gap-0.5">
-                                <span className="text-[0.5625rem] font-sans uppercase tracking-wide text-[var(--muted-foreground)]">
-                                  SDK session bookkeeping
-                                </span>
-                                {secondary.map((u) => (
-                                  <span key={u.model} className="text-[var(--muted-foreground)]">
-                                    {u.model} (in {u.inputTokens}, out {u.outputTokens})
-                                  </span>
-                                ))}
-                              </span>
-                            )}
-                          </span>
-                        );
-                      })()}
-                    </span>
-                    <span className="text-[var(--muted-foreground)]">Fast-mode state:</span>
-                    <span
-                      className={cn(
-                        "font-mono",
-                        claudeDiagResult.fastModeState && claudeDiagResult.fastModeState !== "off"
-                          ? "text-amber-400"
-                          : undefined,
-                      )}
-                    >
-                      {claudeDiagResult.fastModeState ?? "unknown"}
-                    </span>
-                  </div>
-                  {claudeDiagResult.billedDifferent && (
-                    <div className="rounded-lg bg-[var(--destructive)]/10 p-2.5 text-[0.6875rem] text-[var(--destructive)] ring-1 ring-[var(--destructive)]/30">
-                      Silent downgrade detected — you asked for <strong>{claudeDiagResult.requestedModel}</strong> but
-                      the SDK billed <strong>{claudeDiagResult.modelsBilled.join(", ")}</strong>. This is usually caused
-                      by Claude Code being in <code>cooldown</code> after hitting Opus rate limits, or fast mode being
-                      toggled on in your CLI settings. Run <code>claude /model</code> in your terminal to check.
-                    </div>
-                  )}
-                  {claudeDiagResult.modelUsageDetail.some((u) => u.model !== claudeDiagResult.requestedModel) && (
-                    <div className="rounded-lg bg-[var(--secondary)]/50 p-2.5 text-[0.6875rem] text-[var(--muted-foreground)] ring-1 ring-[var(--border)]">
-                      <strong className="text-[var(--foreground)]">Why is Haiku in the list?</strong> The Claude Agent
-                      SDK runs a <code>UserPromptSubmit</code> hook on every call that uses its small/fast model (Haiku)
-                      to auto-generate a session title and optional context for the main model. This is Claude Code
-                      session bookkeeping — it&apos;s organic to the subscription path, can&apos;t be cleanly disabled,
-                      and doesn&apos;t serve any of your roleplay output. Your actual response always comes from the
-                      model labeled <em>Roleplay generation</em> above. The Haiku tagalong adds only a few output tokens
-                      per turn and a tiny slice of quota.
-                    </div>
-                  )}
-                  {claudeDiagResult.response && (
-                    <div className="rounded-lg bg-[var(--secondary)] p-2.5 ring-1 ring-[var(--border)]">
-                      <div className="text-[0.5625rem] font-sans uppercase tracking-wide text-[var(--muted-foreground)]">
-                        Model Self Identifies As
-                      </div>
-                      <div className="mt-0.5 text-sm font-semibold text-[var(--foreground)]">
-                        {claudeDiagResult.response}
-                      </div>
-                    </div>
-                  )}
-                  {claudeDiagResult.errors.length > 0 && (
-                    <div className="text-[0.6875rem] text-[var(--destructive)]">
-                      {claudeDiagResult.errors.join("; ")}
-                    </div>
-                  )}
-                </div>
-              </TestResultCard>
-            )}
           </div>
         </div>
       </div>

@@ -1,16 +1,8 @@
-import type { LlmGateway, StorageGateway } from "../../../capabilities";
+import type { LlmGateway } from "../../../capabilities/llm";
+import type { StorageGateway } from "../../../capabilities/storage";
 import { parseJsonArray, parseJsonObject } from "../../../core/json";
 import { parseGameJsonish } from "../../../shared/parsing-jsonish";
-import type {
-  SceneAnalysis,
-  SceneCreateRequest,
-  SceneCreateResponse,
-  SceneForkRequest,
-  SceneForkResponse,
-  SceneFullPlan,
-  ScenePlanRequest,
-  ScenePlanResponse,
-} from "@marinara-engine/shared";
+import type { SceneAnalysis, SceneCreateRequest, SceneCreateResponse, SceneForkRequest, SceneForkResponse, SceneFullPlan, ScenePlanRequest, ScenePlanResponse } from "../../../contracts/types/scene";
 
 type JsonRecord = Record<string, unknown>;
 

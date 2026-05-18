@@ -3,8 +3,8 @@
 // ──────────────────────────────────────────────
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/api-client";
-import type { TTSConfig, TTSVoicesResponse, TTSSource } from "@marinara-engine/shared";
-import { TTS_API_KEY_MASK } from "@marinara-engine/shared";
+import type { TTSConfig, TTSVoicesResponse, TTSSource } from "../../engine/contracts/types/tts";
+import { TTS_API_KEY_MASK } from "../../engine/contracts/types/tts";
 
 const KEYS = {
   config: ["tts", "config"] as const,

@@ -1,14 +1,4 @@
-// ──────────────────────────────────────────────
-// Game: GM Tag Parser
-//
-// Extracts [music:], [sfx:], [bg:], [ambient:],
-// [choices:], [qte:], [reputation:], [state:],
-// [direction:], [widget:], and other command tags
-// from GM narration output.
-// Returns clean content + extracted commands.
-// ──────────────────────────────────────────────
-
-import type { DirectionCommand, DirectionEffect, SkillCheckResult, WidgetUpdate } from "@marinara-engine/shared";
+import type { DirectionCommand, DirectionEffect, SkillCheckResult, WidgetUpdate } from "../../../engine/contracts/types/game";
 
 export interface CombatEncounterTag {
   enemies: Array<{
@@ -627,8 +617,6 @@ export function parseSegmentInventoryUpdates(content: string): SegmentInventoryU
   }
 
   const readablePlaceholderRe = /^__READABLE_(\d+)__$/;
-  const narrationRegex = /^\s*Narration\s*:\s*(.+)$/i;
-  const legacyDialogueRegex = /^\s*Dialogue\s*\[([^\]]+)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/i;
   const compactDialogueRegex = /^\s*\[([^\]]+)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/;
   const partyLineRegex =
     /^\s*\[([^\]]+)\]\s*\[(main|side|extra|action|thought|whisper(?::([^\]]+))?)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/i;
@@ -689,8 +677,6 @@ export function parseSegmentInventoryUpdates(content: string): SegmentInventoryU
     const isStandaloneSegment =
       readablePlaceholderRe.test(line) ||
       partyLineRegex.test(line) ||
-      narrationRegex.test(line) ||
-      legacyDialogueRegex.test(line) ||
       compactDialogueRegex.test(line);
 
     if (isStandaloneSegment) {

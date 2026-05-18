@@ -3,12 +3,12 @@
 // ──────────────────────────────────────────────
 import { z } from "zod";
 
-/** Payload for PUT /api/app-settings/:key — the opaque serialized settings blob. */
+/** Payload for writing an opaque serialized app settings blob. */
 export const appSettingsUpdateSchema = z.object({
   value: z.string().max(1_000_000),
 });
 
-/** Response shape for GET /api/app-settings/:key. */
+/** Response shape for reading an app settings blob. */
 export const appSettingsResponseSchema = z.object({
   value: z.string().nullable(),
 });

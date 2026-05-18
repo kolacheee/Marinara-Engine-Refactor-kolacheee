@@ -45,7 +45,7 @@ const HOME_FAQ_ITEMS: HomeFaqItem[] = [
     id: "antivirus-installer",
     category: "Setup",
     question: "My antivirus flagged the installer or deleted files. Is Marinara safe?",
-    answer: "This is a very common false-positive path for installers and batch files that spawn local services.",
+    answer: "This can happen with unsigned installers and native desktop binaries.",
     bullets: [
       "Add the Marinara folder to your antivirus exclusions before reinstalling or restoring files.",
       "Bitdefender and Windows Defender are the most common sources of quarantines here.",
@@ -56,13 +56,12 @@ const HOME_FAQ_ITEMS: HomeFaqItem[] = [
   {
     id: "blank-page-localhost",
     category: "Setup",
-    question: "I get a blank page or ERR_EMPTY_RESPONSE on localhost:7860. What should I try?",
-    answer: "This is usually a browser state problem rather than a dead install.",
+    question: "The app window is blank or stuck loading. What should I try?",
+    answer: "This is usually cached frontend state or a failed local startup, not an old server URL problem.",
     bullets: [
-      "Try localhost:7860 instead of 127.0.0.1, or the reverse if you already used localhost.",
-      "Hard refresh with Ctrl+Shift+R and clear the site's local storage.",
-      "Test in incognito or a different browser.",
-      "Docker and Podman users hit the same symptom, so browser cleanup is still worth trying there too.",
+      "Use Settings > Advanced > Refresh App if the UI is still reachable.",
+      "Relaunch Marinara from the desktop app shortcut.",
+      "If it keeps happening, check the Tauri console logs from the terminal you launched it from.",
     ],
   },
   {
@@ -80,11 +79,11 @@ const HOME_FAQ_ITEMS: HomeFaqItem[] = [
     id: "android-apk-termux",
     category: "Setup",
     question: "Is the Android APK standalone?",
-    answer: "No. The APK is only a WebView shell for Marinara Engine running locally in Termux.",
+    answer: "The migrated app is a native Tauri app. Android builds should use the Tauri mobile target, not the old WebView-plus-server setup.",
     bullets: [
-      "Install Termux from F-Droid and run Marinara with ./start-termux.sh first.",
-      "The APK opens the same-device local server at 127.0.0.1, so it cannot work if Termux is closed.",
-      "If it stays on the connection screen, go back to Termux and start the server.",
+      "Desktop builds are the primary supported path right now.",
+      "Mobile builds must ship the Rust backend with the app.",
+      "The old same-device local server workflow is not part of the active app.",
     ],
   },
   {
@@ -94,8 +93,7 @@ const HOME_FAQ_ITEMS: HomeFaqItem[] = [
     answer: "Your system usually just does not have pnpm available yet.",
     bullets: [
       "Install pnpm globally with npm install -g pnpm, or use the EXE installer if you want the guided path.",
-      "On Android or Termux, a long pause at Corepack alignment is a recurring pain point rather than a special Marinara-only error.",
-      "If Termux hangs specifically on 'Aligning pnpm via Corepack', let it finish before assuming it is dead.",
+      "If Corepack is managing pnpm, let it finish aligning the requested pnpm version before retrying.",
     ],
   },
   {
@@ -194,10 +192,10 @@ const HOME_FAQ_ITEMS: HomeFaqItem[] = [
     id: "where-data-lives",
     category: "Core",
     question: "Where are my chats, presets, and other data stored?",
-    answer: "The main local database lives in packages/server/data/marinara-engine.db.",
+    answer: "The Tauri app stores data in its local app data directory as JSON records and managed asset files.",
     bullets: [
-      "That is the file power users usually back up or inspect when they want direct access.",
-      "Most of the 'where is X stored' questions end up there.",
+      "Use Settings > Import/Profile Export for normal profile export and restore workflows.",
+      "Direct file edits are for power users only; restart the app after changing local data by hand.",
     ],
   },
   {
@@ -357,7 +355,7 @@ const HOME_FAQ_ITEMS: HomeFaqItem[] = [
     category: "Misc",
     question: "Is there a mobile app?",
     answer:
-      "Not as a standalone app yet. You can install Marinara as a PWA from the browser on phones and tablets while the server runs on your computer, Docker host, or Termux device.",
+      "Desktop Tauri builds are the supported install path. Mobile builds need the same native Rust backend packaged through Tauri mobile.",
   },
   {
     id: "tts-support",

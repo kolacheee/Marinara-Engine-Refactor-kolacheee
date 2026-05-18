@@ -6,16 +6,12 @@
 // The active chat's autonomous messaging is handled by ConversationView.
 
 import { useEffect, useRef } from "react";
-import type { Chat } from "@marinara-engine/shared";
+import type { Chat } from "../../../engine/contracts/types/chat";
 import type { AvatarCropValue } from "../../../shared/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { startGeneration } from "../../../engine/generation";
-import {
-  checkConversationAutonomous,
-  getConversationBusyDelay,
-  recordAssistantActivity,
-} from "../../../engine/modes/chat";
+import { startGeneration } from "../../../engine/generation/start-generation";
+import { checkConversationAutonomous, getConversationBusyDelay, recordAssistantActivity } from "../../../engine/modes/chat/autonomous/autonomous.service";
 import { llmApi } from "../../../shared/api/llm-api";
 import { storageApi } from "../../../shared/api/storage-api";
 import { api } from "../../../shared/api/api-client";

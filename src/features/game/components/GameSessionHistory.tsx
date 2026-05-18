@@ -16,7 +16,7 @@ import {
   X,
   RefreshCw,
 } from "lucide-react";
-import type { GameMap, GameNpc, PartyArc, SessionSummary } from "@marinara-engine/shared";
+import type { GameMap, GameNpc, PartyArc, SessionSummary } from "../../../engine/contracts/types/game";
 import { toast } from "sonner";
 import { AnimatedText } from "./AnimatedText";
 

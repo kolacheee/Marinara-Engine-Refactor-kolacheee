@@ -2,17 +2,10 @@
 // React Query: Preset, Group, Section & Choice hooks
 // ──────────────────────────────────────────────
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { previewGenerationPrompt } from "../../../engine/generation";
+import { previewGenerationPrompt } from "../../../engine/generation/prompt-preview";
 import { storageApi } from "../../../shared/api/storage-api";
 import { api } from "../../../shared/api/api-client";
-import type {
-  PromptPreset,
-  PromptGroup,
-  PromptSection,
-  ChoiceBlock,
-  GenerationParameters,
-  ChatMLMessage,
-} from "@marinara-engine/shared";
+import type { PromptPreset, PromptGroup, PromptSection, ChoiceBlock, GenerationParameters, ChatMLMessage } from "../../../engine/contracts/types/prompt";
 
 // ── Query Keys ──
 

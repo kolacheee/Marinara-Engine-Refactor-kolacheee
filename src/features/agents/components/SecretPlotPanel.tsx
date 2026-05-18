@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, Plus, RefreshCw, Save } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { Message } from "@marinara-engine/shared";
+import type { Message } from "../../../engine/contracts/types/chat";
 import { api } from "../../../shared/api/api-client";
 import { cn } from "../../../shared/lib/utils";
 import { useGenerate } from "../../generation/hooks/use-generate";

@@ -1,5 +1,6 @@
 use marinara_core::{AppError, AppResult};
 use marinara_security::is_allowed_outbound_url;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -54,11 +55,32 @@ pub async fn complete_rich(request: LlmRequest) -> AppResult<LlmCompletion> {
         "google" | "google_vertex" => complete_google(request)
             .await
             .map(|content| LlmCompletion { content, tool_calls: Vec::new() }),
-        "openai_chatgpt" | "claude_subscription" => Err(AppError::invalid_input(
-            "This local-session provider is not available in the native Tauri runtime. Use an API-backed provider connection.",
-        )),
         _ => complete_openai_compatible_rich(request).await,
     }
+}
+
+pub async fn stream_events(
+    request: LlmRequest,
+    mut emit: impl FnMut(Value) -> AppResult<()> + Send,
+) -> AppResult<()> {
+    emit(json!({ "type": "start" }))?;
+    if request.connection.provider != "anthropic"
+        && request.connection.provider != "google"
+        && request.connection.provider != "google_vertex"
+        && request.tools.is_empty()
+    {
+        stream_openai_compatible(request, &mut emit).await?;
+    } else {
+        let result = complete_rich(request).await?;
+        if !result.content.is_empty() {
+            emit(json!({ "type": "token", "text": result.content, "data": result.content }))?;
+        }
+        for tool_call in result.tool_calls {
+            emit(json!({ "type": "tool_call", "data": tool_call }))?;
+        }
+    }
+    emit(json!({ "type": "done" }))?;
+    Ok(())
 }
 
 pub fn unavailable_payload(message: impl Into<String>) -> Value {
@@ -141,6 +163,93 @@ async fn complete_openai_compatible_rich(request: LlmRequest) -> AppResult<LlmCo
         .map_err(|error| AppError::new("llm_network_error", error.to_string()))?;
     parse_json_response_rich(response)
     .await
+}
+
+async fn stream_openai_compatible(
+    request: LlmRequest,
+    emit: &mut (impl FnMut(Value) -> AppResult<()> + Send),
+) -> AppResult<()> {
+    let base = base_url(&request.connection.provider, &request.connection.base_url);
+    let url = format!("{base}/chat/completions");
+    ensure_url_allowed(&url)?;
+    let messages: Vec<Value> = request.messages.iter().map(openai_message).collect();
+    let mut body = json!({
+        "model": request.connection.model,
+        "messages": messages,
+        "stream": true,
+        "max_tokens": max_tokens(&request.parameters, 1024),
+    });
+    if let Some(temp) = temperature(&request.parameters) {
+        body["temperature"] = json!(temp);
+    }
+    let client = reqwest::Client::new();
+    let mut req = client.post(url).json(&body);
+    if !request.connection.api_key.trim().is_empty() {
+        req = req.bearer_auth(request.connection.api_key.trim());
+    }
+    if request.connection.provider == "openrouter" {
+        req = req
+            .header("HTTP-Referer", "https://marinara.local")
+            .header("X-Title", "Marinara Engine");
+    }
+    let response = req
+        .send()
+        .await
+        .map_err(|error| AppError::new("llm_network_error", error.to_string()))?;
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response.json::<Value>().await.unwrap_or_else(|_| json!({}));
+        return Err(AppError::with_details(
+            "llm_provider_error",
+            format!("Provider returned HTTP {status}"),
+            error_body,
+        ));
+    }
+
+    let mut stream = response.bytes_stream();
+    let mut buffer = String::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|error| AppError::new("llm_stream_error", error.to_string()))?;
+        buffer.push_str(&String::from_utf8_lossy(&chunk));
+        while let Some(index) = buffer.find("\n\n") {
+            let block = buffer[..index].to_string();
+            buffer = buffer[index + 2..].to_string();
+            process_openai_sse_block(&block, emit)?;
+        }
+    }
+    if !buffer.trim().is_empty() {
+        process_openai_sse_block(&buffer, emit)?;
+    }
+    Ok(())
+}
+
+fn process_openai_sse_block(
+    block: &str,
+    emit: &mut (impl FnMut(Value) -> AppResult<()> + Send),
+) -> AppResult<()> {
+    let payload = block
+        .lines()
+        .filter_map(|line| line.trim_start().strip_prefix("data:"))
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join("\n");
+    if payload.is_empty() || payload == "[DONE]" {
+        return Ok(());
+    }
+    let value: Value = serde_json::from_str(&payload)
+        .map_err(|error| AppError::new("llm_stream_parse_error", error.to_string()))?;
+    let Some(choices) = value.get("choices").and_then(Value::as_array) else {
+        return Ok(());
+    };
+    for choice in choices {
+        let delta = choice.get("delta").unwrap_or(choice);
+        if let Some(content) = delta.get("content").and_then(Value::as_str) {
+            if !content.is_empty() {
+                emit(json!({ "type": "token", "text": content, "data": content }))?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn openai_message(message: &LlmMessage) -> Value {

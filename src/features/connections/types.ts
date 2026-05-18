@@ -28,15 +28,3 @@ export interface ConnectionTestResult {
   error?: string;
   details?: unknown;
 }
-
-export interface ClaudeSubscriptionDiagnosis {
-  success: boolean;
-  requestedModel: string;
-  modelsBilled: string[];
-  modelUsageDetail: Array<{ model: string; inputTokens: number; outputTokens: number }>;
-  billedDifferent: boolean;
-  fastModeState: "off" | "cooldown" | "on" | null;
-  response: string;
-  errors: string[];
-  latencyMs: number;
-}

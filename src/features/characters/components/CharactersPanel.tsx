@@ -45,7 +45,7 @@ import {
   Wand2,
   Minus,
 } from "lucide-react";
-import { getCharacterTitle } from "../lib/character-display";
+import { getCharacterTitle } from "../../../shared/lib/character-display";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { cn, getAvatarCropStyle, type AvatarCrop } from "../../../shared/lib/utils";
 import { ExportFormatDialog, type ExportFormatChoice } from "../../../shared/components/ui/ExportFormatDialog";

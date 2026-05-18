@@ -1,7 +1,8 @@
 use super::shared::*;
 use super::*;
 
-const MEMORY_CHUNK_SIZE: usize = 8;
+const MEMORY_CHUNK_SIZE: usize = 5;
+const MEMORY_EMBEDDING_DIMS: usize = 256;
 
 pub(crate) fn messages_for_chat(state: &AppState, chat_id: &str) -> AppResult<Vec<Value>> {
     let mut filters = Map::new();
@@ -24,6 +25,29 @@ fn message_content(message: &Value) -> String {
         .to_string()
 }
 
+fn lexical_memory_embedding(text: &str) -> Vec<f64> {
+    let mut vector = vec![0.0_f64; MEMORY_EMBEDDING_DIMS];
+    for token in text
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter(|token| token.len() > 1)
+    {
+        let mut hash = 2166136261_u32;
+        for byte in token.to_ascii_lowercase().bytes() {
+            hash ^= byte as u32;
+            hash = hash.wrapping_mul(16777619);
+        }
+        let index = (hash as usize) % MEMORY_EMBEDDING_DIMS;
+        vector[index] += 1.0;
+    }
+    let magnitude = vector.iter().map(|value| value * value).sum::<f64>().sqrt();
+    if magnitude > 0.0 {
+        for value in &mut vector {
+            *value /= magnitude;
+        }
+    }
+    vector
+}
+
 fn is_hidden_from_ai(message: &Value) -> bool {
     let extra = match message.get("extra") {
         Some(Value::Object(object)) => Some(object.clone()),
@@ -37,45 +61,6 @@ fn is_hidden_from_ai(message: &Value) -> bool {
         .and_then(|object| object.get("hiddenFromAi"))
         .and_then(Value::as_bool)
         .unwrap_or(false)
-}
-
-fn estimate_tokens(text: &str) -> usize {
-    (text.chars().count() / 4).max(1)
-}
-
-fn compact_line(text: &str, max_chars: usize) -> String {
-    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if normalized.chars().count() <= max_chars {
-        normalized
-    } else {
-        let mut out = normalized
-            .chars()
-            .take(max_chars.saturating_sub(1))
-            .collect::<String>();
-        out = out.trim_end().to_string();
-        out.push_str("...");
-        out
-    }
-}
-
-fn build_local_summary(messages: &[Value]) -> String {
-    let mut lines = Vec::new();
-    for message in messages {
-        let content = message_content(message);
-        if content.is_empty() {
-            continue;
-        }
-        let role = message
-            .get("role")
-            .and_then(Value::as_str)
-            .unwrap_or("message");
-        lines.push(format!("- {role}: {}", compact_line(&content, 280)));
-    }
-    if lines.is_empty() {
-        "No visible messages were available to summarize.".to_string()
-    } else {
-        lines.join("\n")
-    }
 }
 
 fn merge_chat_metadata(
@@ -410,16 +395,18 @@ pub(crate) fn refresh_chat_memories(state: &AppState, chat_id: &str) -> AppResul
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
+            let embedding = lexical_memory_embedding(&content);
             json!({
                 "id": new_id(),
                 "chatId": chat_id,
                 "content": content,
+                "embedding": embedding,
                 "messageCount": chunk.len(),
                 "firstMessageAt": chunk.first().and_then(|message| message.get("createdAt")).cloned().unwrap_or(Value::Null),
                 "lastMessageAt": chunk.last().and_then(|message| message.get("createdAt")).cloned().unwrap_or(Value::Null),
                 "createdAt": now,
-                "hasEmbedding": false,
-                "embeddingStatus": "unavailable"
+                "hasEmbedding": true,
+                "embeddingStatus": "vectorized"
             })
         })
         .collect::<Vec<_>>();
@@ -429,108 +416,99 @@ pub(crate) fn refresh_chat_memories(state: &AppState, chat_id: &str) -> AppResul
     Ok(json!({ "rebuilt": chunks.len(), "chunks": chunks }))
 }
 
-pub(crate) fn generate_summary(state: &AppState, chat_id: &str, body: Value) -> AppResult<Value> {
+pub(crate) fn export_chat_memories(state: &AppState, chat_id: &str) -> AppResult<Value> {
     let chat = get_required(state, "chats", chat_id)?;
-    let meta = metadata_map(&chat);
-    let context_size = body
-        .get("contextSize")
-        .and_then(Value::as_u64)
-        .or_else(|| meta.get("summaryContextSize").and_then(Value::as_u64))
-        .unwrap_or(50)
-        .clamp(5, 200) as usize;
-    let all_messages = messages_for_chat(state, chat_id)?;
-    let start_id = body.get("rangeStartMessageId").and_then(Value::as_str);
-    let end_id = body.get("rangeEndMessageId").and_then(Value::as_str);
-    let mut range_start_index = None;
-    let mut range_end_index = None;
-    let selected = if let (Some(start_id), Some(end_id)) = (start_id, end_id) {
-        let start = all_messages
-            .iter()
-            .position(|message| message.get("id").and_then(Value::as_str) == Some(start_id))
-            .ok_or_else(|| AppError::invalid_input("Summary range start message was not found"))?;
-        let end = all_messages
-            .iter()
-            .position(|message| message.get("id").and_then(Value::as_str) == Some(end_id))
-            .ok_or_else(|| AppError::invalid_input("Summary range end message was not found"))?;
-        let from = start.min(end);
-        let to = start.max(end);
-        if to - from + 1 > 200 {
-            return Err(AppError::invalid_input(
-                "Summary ranges cannot include more than 200 messages",
-            ));
+    let memories = chat_array_field(state, chat_id, "memories")?;
+    let memory_count = memories.as_array().map(Vec::len).unwrap_or(0);
+    Ok(json!({
+        "type": "marinara_memory_recall",
+        "version": 1,
+        "exportedAt": now_iso(),
+        "data": {
+            "sourceChat": {
+                "id": chat_id,
+                "name": chat.get("name").and_then(Value::as_str).unwrap_or("Untitled Chat"),
+                "mode": chat.get("mode").and_then(Value::as_str).unwrap_or("conversation"),
+                "memoryCount": memory_count
+            },
+            "chunks": memories
         }
-        range_start_index = Some(from + 1);
-        range_end_index = Some(to + 1);
-        all_messages[from..=to].to_vec()
-    } else {
-        all_messages
-            .iter()
-            .rev()
-            .take(context_size)
-            .cloned()
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect()
-    };
-    let selected = selected
-        .into_iter()
-        .filter(|message| !is_hidden_from_ai(message) && !message_content(message).is_empty())
-        .collect::<Vec<_>>();
-    if selected.is_empty() {
-        return Err(AppError::invalid_input(
-            "No non-hidden messages available for summary generation",
-        ));
-    }
-    let summary = build_local_summary(&selected);
-    let now = now_iso();
-    let entry = json!({
-        "id": new_id(),
-        "kind": "rolling",
-        "origin": "manual",
-        "title": if range_start_index.is_some() { "Summary range" } else { "Summary of recent messages" },
-        "content": summary,
-        "enabled": true,
-        "sourceMode": if range_start_index.is_some() { "range" } else { "last" },
-        "messageCount": selected.len(),
-        "rangeStartIndex": range_start_index,
-        "rangeEndIndex": range_end_index,
-        "messageIds": selected.iter().filter_map(|message| message.get("id").and_then(Value::as_str)).collect::<Vec<_>>(),
-        "promptTemplateId": body.get("promptTemplateId").cloned().unwrap_or(Value::Null),
-        "tokenEstimate": estimate_tokens(&summary),
-        "createdAt": now,
-        "updatedAt": now
-    });
-    let mut entries = meta
-        .get("summaryEntries")
+    }))
+}
+
+pub(crate) fn import_chat_memories(state: &AppState, chat_id: &str, body: Value) -> AppResult<Value> {
+    get_required(state, "chats", chat_id)?;
+    let incoming = body
+        .get("data")
+        .and_then(|data| data.get("chunks"))
+        .or_else(|| body.get("chunks"))
         .and_then(Value::as_array)
+        .ok_or_else(|| AppError::invalid_input("Memory Recall import must contain a data.chunks array"))?;
+    let mut memories = chat_array_field(state, chat_id, "memories")?
+        .as_array()
         .cloned()
         .unwrap_or_default();
-    entries.push(entry.clone());
-    let compiled = entries
+    let mut seen = memories
         .iter()
-        .filter(|entry| {
-            entry
-                .get("enabled")
-                .and_then(Value::as_bool)
-                .unwrap_or(true)
+        .filter_map(|memory| {
+            memory
+                .get("content")
+                .and_then(Value::as_str)
+                .map(|content| content.trim().to_string())
         })
-        .filter_map(|entry| entry.get("content").and_then(Value::as_str))
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    let mut patch = Map::new();
-    patch.insert("summary".to_string(), Value::String(compiled.clone()));
-    patch.insert("summaryEntries".to_string(), Value::Array(entries.clone()));
-    if range_start_index.is_none() && body.get("contextSize").is_some() {
-        patch.insert("summaryContextSize".to_string(), json!(context_size));
+        .collect::<std::collections::HashSet<_>>();
+    let now = now_iso();
+    let mut imported = 0usize;
+    let mut skipped = 0usize;
+    for value in incoming {
+        let Some(content) = value.get("content").and_then(Value::as_str).map(str::trim) else {
+            skipped += 1;
+            continue;
+        };
+        if content.is_empty() || !seen.insert(content.to_string()) {
+            skipped += 1;
+            continue;
+        }
+        let mut memory = value.as_object().cloned().unwrap_or_default();
+        memory.insert(
+            "id".to_string(),
+            memory
+                .get("id")
+                .and_then(Value::as_str)
+                .filter(|id| !id.trim().is_empty())
+                .map(|id| Value::String(id.to_string()))
+                .unwrap_or_else(|| Value::String(new_id())),
+        );
+        memory.insert("chatId".to_string(), Value::String(chat_id.to_string()));
+        memory.insert("content".to_string(), Value::String(content.to_string()));
+        memory
+            .entry("createdAt".to_string())
+            .or_insert_with(|| Value::String(now.clone()));
+        memory
+            .entry("messageCount".to_string())
+            .or_insert_with(|| json!(1));
+        let has_embedding = memory
+            .get("embedding")
+            .and_then(Value::as_array)
+            .is_some_and(|items| items.iter().any(Value::is_number));
+        if !has_embedding {
+            memory.insert(
+                "embedding".to_string(),
+                Value::Array(
+                    lexical_memory_embedding(content)
+                        .into_iter()
+                        .map(|value| json!(value))
+                        .collect(),
+                ),
+            );
+        }
+        memory.insert("hasEmbedding".to_string(), json!(true));
+        memory.insert("embeddingStatus".to_string(), json!("vectorized"));
+        memories.push(Value::Object(memory));
+        imported += 1;
     }
-    merge_chat_metadata(state, chat_id, patch)?;
-    Ok(json!({
-        "summary": compiled,
-        "entry": entry,
-        "entries": entries,
-        "messageIds": selected.iter().filter_map(|message| message.get("id").and_then(Value::as_str)).collect::<Vec<_>>()
-    }))
+    set_chat_array_field(state, chat_id, "memories", memories)?;
+    Ok(json!({ "imported": imported, "skipped": skipped }))
 }
 
 pub(crate) fn touch_chat(state: &AppState, chat_id: &str) -> AppResult<()> {

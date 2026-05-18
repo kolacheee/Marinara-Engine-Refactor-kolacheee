@@ -12,7 +12,6 @@ export interface CustomToolRow {
   executionType: string;
   webhookUrl: string | null;
   staticResult: string | null;
-  scriptBody: string | null;
   enabled: string;
   createdAt: string;
   updatedAt: string;
@@ -21,14 +20,15 @@ export interface CustomToolRow {
 export interface CustomToolCapabilities {
   staticResults?: boolean;
   webhooks?: boolean;
-  scriptExecutionEnabled: boolean;
-  scriptDisabledReason?: string;
+  scriptExecutionEnabled?: boolean;
 }
 
-export function isCustomToolSelectable(tool: CustomToolRow, capabilities?: CustomToolCapabilities | null): boolean {
+export function isCustomToolSelectable(tool: CustomToolRow, _capabilities?: CustomToolCapabilities | null): boolean {
   const enabled = tool.enabled === "true" || tool.enabled === "1";
   if (!enabled) return false;
-  return tool.executionType !== "script" || capabilities?.scriptExecutionEnabled === true;
+  if (tool.executionType === "static") return !!tool.staticResult?.trim();
+  if (tool.executionType === "webhook") return !!tool.webhookUrl?.trim();
+  return false;
 }
 
 const toolKeys = {

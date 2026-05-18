@@ -9,7 +9,6 @@ import {
   useCreateCustomTool,
   useUpdateCustomTool,
   useDeleteCustomTool,
-  useCustomToolCapabilities,
   type CustomToolRow,
 } from "../hooks/use-custom-tools";
 import {
@@ -33,11 +32,7 @@ import { HelpTooltip } from "../../../shared/components/ui/HelpTooltip";
 const EXEC_TYPES = [
   { value: "static", label: "Static Result", icon: FileText, description: "Returns a fixed string when called." },
   { value: "webhook", label: "Webhook", icon: Globe, description: "Sends a POST request to an external URL." },
-  { value: "script", label: "Script", icon: Code2, description: "Runs a JavaScript expression in the native tool runtime." },
 ] as const;
-
-const SCRIPT_TOOLS_DISABLED_MESSAGE =
-  "Script tools are disabled in the native Tauri runtime. Use Static Result or Webhook custom tools.";
 
 // ═══════════════════════════════════════════════
 //  Main Editor
@@ -50,8 +45,6 @@ export function ToolEditor() {
   const createTool = useCreateCustomTool();
   const updateTool = useUpdateCustomTool();
   const deleteTool = useDeleteCustomTool();
-  const { data: toolCapabilities } = useCustomToolCapabilities();
-  const scriptToolsEnabled = toolCapabilities?.scriptExecutionEnabled === true;
 
   const dbTool = useMemo(() => {
     if (!toolDetailId || !allTools) return null;
@@ -63,10 +56,9 @@ export function ToolEditor() {
   // ── Local state ──
   const [localName, setLocalName] = useState("");
   const [localDesc, setLocalDesc] = useState("");
-  const [localExecType, setLocalExecType] = useState<"static" | "webhook" | "script">("static");
+  const [localExecType, setLocalExecType] = useState<"static" | "webhook">("static");
   const [localWebhookUrl, setLocalWebhookUrl] = useState("");
   const [localStaticResult, setLocalStaticResult] = useState("");
-  const [localScriptBody, setLocalScriptBody] = useState("");
   const [localParams, setLocalParams] = useState<ParamDef[]>([]);
   const [dirty, setDirty] = useState(false);
   const setEditorDirty = useUIStore((s) => s.setEditorDirty);
@@ -81,10 +73,9 @@ export function ToolEditor() {
     if (dbTool) {
       setLocalName(dbTool.name);
       setLocalDesc(dbTool.description);
-      setLocalExecType(dbTool.executionType as "static" | "webhook" | "script");
+      setLocalExecType(dbTool.executionType === "webhook" ? "webhook" : "static");
       setLocalWebhookUrl(dbTool.webhookUrl ?? "");
       setLocalStaticResult(dbTool.staticResult ?? "");
-      setLocalScriptBody(dbTool.scriptBody ?? "");
       // Parse params from schema
       try {
         const schema = JSON.parse(dbTool.parametersSchema || "{}");
@@ -110,7 +101,6 @@ export function ToolEditor() {
       setLocalExecType("static");
       setLocalWebhookUrl("");
       setLocalStaticResult("");
-      setLocalScriptBody("");
       setLocalParams([]);
     }
     setDirty(false);
@@ -156,11 +146,14 @@ export function ToolEditor() {
       setSaveError("Description is required.");
       return;
     }
-    if (localExecType === "script" && !scriptToolsEnabled) {
-      setSaveError(SCRIPT_TOOLS_DISABLED_MESSAGE);
+    if (localExecType === "static" && !localStaticResult.trim()) {
+      setSaveError("Static result is required for a static custom tool.");
       return;
     }
-
+    if (localExecType === "webhook" && !localWebhookUrl.trim()) {
+      setSaveError("Webhook URL is required for a webhook custom tool.");
+      return;
+    }
     const payload = {
       name: localName,
       description: localDesc,
@@ -168,7 +161,6 @@ export function ToolEditor() {
       executionType: localExecType,
       webhookUrl: localExecType === "webhook" ? localWebhookUrl || null : null,
       staticResult: localExecType === "static" ? localStaticResult || null : null,
-      scriptBody: localExecType === "script" ? localScriptBody || null : null,
       enabled: true,
     };
 
@@ -192,13 +184,11 @@ export function ToolEditor() {
     localExecType,
     localWebhookUrl,
     localStaticResult,
-    localScriptBody,
     dbTool,
     createTool,
     updateTool,
     buildParamsSchema,
     openToolDetail,
-    scriptToolsEnabled,
   ]);
 
   const handleDelete = async () => {
@@ -447,19 +437,16 @@ export function ToolEditor() {
 
           {/* ── Execution Type ── */}
           <FieldGroup label="Execution Type" icon={<Wrench size="0.875rem" className="text-[var(--primary)]" />}>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {EXEC_TYPES.map((et) => {
                 const isActive = localExecType === et.value;
-                const isDisabledScript = et.value === "script" && !scriptToolsEnabled && !isActive;
                 const Icon = et.icon;
                 return (
                   <button
                     key={et.value}
                     type="button"
-                    disabled={isDisabledScript}
-                    title={isDisabledScript ? SCRIPT_TOOLS_DISABLED_MESSAGE : et.description}
+                    title={et.description}
                     onClick={() => {
-                      if (isDisabledScript) return;
                       setLocalExecType(et.value);
                       markDirty();
                     }}
@@ -468,7 +455,6 @@ export function ToolEditor() {
                       isActive
                         ? "bg-[var(--primary)]/10 ring-[var(--primary)] text-[var(--primary)]"
                         : "ring-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]",
-                      isDisabledScript && "cursor-not-allowed opacity-45 hover:bg-transparent",
                     )}
                   >
                     <Icon size="1rem" />
@@ -477,17 +463,6 @@ export function ToolEditor() {
                 );
               })}
             </div>
-            {!scriptToolsEnabled && (
-              <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-200">
-                <AlertCircle size="0.875rem" className="mt-0.5 shrink-0" />
-                <div>
-                  <div className="font-medium">Script tools are disabled in this desktop build.</div>
-                  <div className="mt-1 text-amber-100/80">
-                    Static Result and Webhook tools are available for agent tool use.
-                  </div>
-                </div>
-              </div>
-            )}
             <p className="mt-1.5 text-[0.625rem] text-[var(--muted-foreground)]">{execMeta.description}</p>
           </FieldGroup>
 
@@ -526,30 +501,6 @@ export function ToolEditor() {
                 A POST request will be sent with{" "}
                 <code className="rounded bg-[var(--secondary)] px-1">{"{ tool, arguments }"}</code> as JSON body.
                 Response is returned to the AI.
-              </p>
-            </FieldGroup>
-          )}
-
-          {localExecType === "script" && (
-            <FieldGroup label="Script Body" icon={<Code2 size="0.875rem" className="text-[var(--primary)]" />}>
-              <textarea
-                value={localScriptBody}
-                onChange={(e) => {
-                  setLocalScriptBody(e.target.value);
-                  markDirty();
-                }}
-                rows={10}
-                placeholder={
-                  "// args is an object with the parameters\n// Return a value or object\nconst result = args.x + args.y;\nreturn { sum: result };"
-                }
-                className="w-full resize-y rounded-xl bg-[var(--secondary)] px-4 py-3 font-mono text-xs leading-relaxed ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-              />
-              <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
-                Write JavaScript. Has access to <code className="rounded bg-[var(--secondary)] px-1">args</code>,{" "}
-                <code className="rounded bg-[var(--secondary)] px-1">JSON</code>,{" "}
-                <code className="rounded bg-[var(--secondary)] px-1">Math</code>,{" "}
-                <code className="rounded bg-[var(--secondary)] px-1">Date</code>. Must{" "}
-                <code className="rounded bg-[var(--secondary)] px-1">return</code> a result.
               </p>
             </FieldGroup>
           )}

@@ -1,4 +1,4 @@
-import type { StorageGateway } from "../capabilities";
+import type { StorageGateway } from "../capabilities/storage";
 import { loadChatMessages, requireRecord, resolveGenerationConnection } from "./context";
 import { assembleGenerationPrompt } from "./prompt-assembly";
 

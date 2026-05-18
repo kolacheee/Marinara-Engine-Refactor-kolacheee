@@ -2,7 +2,7 @@
 // Chat: Mari Thinking Indicator
 // ──────────────────────────────────────────────
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { PROFESSOR_MARI_ID } from "@marinara-engine/shared";
+import { PROFESSOR_MARI_ID } from "../../../engine/contracts/constants/defaults";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useChat } from "../../chats/hooks/use-chats";
 

@@ -1,6 +1,7 @@
 use super::shared::*;
 use super::*;
 
+#[path = "images/providers.rs"]
 mod providers;
 
 pub(crate) use providers::{

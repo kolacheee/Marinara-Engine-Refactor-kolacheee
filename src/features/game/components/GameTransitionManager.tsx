@@ -7,7 +7,7 @@
 // ──────────────────────────────────────────────
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { cn } from "../../../shared/lib/utils";
-import type { GameActiveState } from "@marinara-engine/shared";
+import type { GameActiveState } from "../../../engine/contracts/types/game";
 import { AnimatedText } from "./AnimatedText";
 
 export type TransitionType =

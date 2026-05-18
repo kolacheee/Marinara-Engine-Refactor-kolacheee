@@ -1,19 +1,5 @@
-// ──────────────────────────────────────────────
-// Knowledge Router Agent — Catalog-based entry selection
-// ──────────────────────────────────────────────
-// A lower-cost alternative to the knowledge-retrieval agent. Instead of
-// summarizing every lorebook entry, the router reads a short catalog
-// (entry id + name + summary) and returns the IDs of the entries it
-// thinks are relevant to the current scene. The selected entries are
-// then injected verbatim — no per-entry summarization pass.
-//
-// The summary used in the catalog is the entry's user-written
-// `description` if non-empty, otherwise a fallback snippet of the
-// entry's content (~60 tokens). This keeps the router useful out of
-// the box for casual users while letting power users tune precision
-// by writing tight descriptions.
-// ──────────────────────────────────────────────
-import type { AgentContext, AgentResult, LorebookEntry } from "@marinara-engine/shared";
+import type { AgentContext, AgentResult } from "../../contracts/types/agent";
+import type { LorebookEntry } from "../../contracts/types/lorebook";
 import type { BaseLLMProvider } from "../../generation-core/llm/base-provider.js";
 import { executeAgent, type AgentExecConfig } from "../executor/agent-executor.js";
 import {

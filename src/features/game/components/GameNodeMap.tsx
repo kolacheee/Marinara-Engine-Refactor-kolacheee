@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 import { useState, useCallback, type ReactNode } from "react";
 import { cn } from "../../../shared/lib/utils";
-import type { GameMap } from "@marinara-engine/shared";
+import type { GameMap } from "../../../engine/contracts/types/game";
 
 interface GameNodeMapProps {
   map: GameMap;

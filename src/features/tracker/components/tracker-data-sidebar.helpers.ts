@@ -1,11 +1,6 @@
 import type { CSSProperties } from "react";
-import type {
-  CharacterStat,
-  GameState,
-  Persona,
-  PresentCharacter,
-  TrackerCardColorConfig,
-} from "@marinara-engine/shared";
+import type { CharacterStat, GameState, PresentCharacter } from "../../../engine/contracts/types/game-state";
+import type { Persona, TrackerCardColorConfig } from "../../../engine/contracts/types/persona";
 import type { SpriteInfo } from "../../characters/hooks/use-characters";
 import {
   DEFAULT_TRACKER_CARD_ACCENT,

@@ -55,10 +55,10 @@ import { animateTextHtml } from "./AnimatedText";
 import { ttsService } from "../../../shared/lib/tts-service";
 import { getOrCreateCachedTTSAudioBlob } from "../../../shared/lib/tts-audio-cache";
 import { resolveTTSVoiceForSpeaker, splitTTSChunks, ttsConfigMatchesSpeaker } from "../../../shared/lib/tts-dialogue";
-import type { PartyDialogueLine, Message, TTSConfig, GameNpc, SkillCheckResult } from "@marinara-engine/shared";
+import type { Message } from "../../../engine/contracts/types/chat";
+import type { PartyDialogueLine, GameNpc, SkillCheckResult } from "../../../engine/contracts/types/game";
+import type { TTSConfig } from "../../../engine/contracts/types/tts";
 import type { CharacterMap, PersonaInfo } from "../../chats/components/chat-area.types";
-
-export { formatNarration } from "../lib/game-narration-format";
 
 /** Build inline style for a color that may be a plain color or a CSS gradient. */
 function nameColorStyle(color?: string): CSSProperties | undefined {
@@ -5070,15 +5070,8 @@ function parseNarrationSegments(message: NarrationMessage, speakerColors: Map<st
 
   const lines = normalizeInlineVnDialogueLines(source).split(/\r?\n/);
   const parsed: NarrationSegment[] = [];
-  // Readable placeholder regex
   const readablePlaceholderRe = /^__READABLE_(\d+)__$/;
-  // Legacy format (backward compat): Narration: text
-  const narrationRegex = /^\s*Narration\s*:\s*(.+)$/i;
-  // Legacy format (backward compat): Dialogue [Name] [expression]: "text"
-  const legacyDialogueRegex = /^\s*Dialogue\s*\[([^\]]+)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/i;
-  // New compact format: [Name] [expression]: "text" or [Name]: "text" or [Name]: text
   const compactDialogueRegex = /^\s*\[([^\]]+)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/;
-  // Party dialogue lines — parsed inline as VN segments
   const partyLineRegex =
     /^\s*\[([^\]]+)\]\s*\[(main|side|extra|action|thought|whisper(?::([^\]]+))?)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/i;
 
@@ -5172,25 +5165,7 @@ function parseNarrationSegments(message: NarrationMessage, speakerColors: Map<st
       continue;
     }
 
-    const narrationMatch = line.match(narrationRegex);
-    if (narrationMatch) {
-      if (fallbackText.trim()) {
-        parsed.push({
-          id: `${message.id}-fallback-${parsed.length}`,
-          type: "narration",
-          content: fallbackText.trim(),
-        });
-        fallbackText = "";
-      }
-      parsed.push({
-        id: `${message.id}-n-${parsed.length}`,
-        type: "narration",
-        content: narrationMatch[1]!.trim(),
-      });
-      continue;
-    }
-
-    const dialogueMatch = line.match(legacyDialogueRegex) || line.match(compactDialogueRegex);
+    const dialogueMatch = line.match(compactDialogueRegex);
     if (dialogueMatch) {
       if (fallbackText.trim()) {
         parsed.push({
@@ -5251,8 +5226,6 @@ function truncateMessageContentAtSegment(rawContent: string, segmentIndexInclusi
 
   const lines = buildTruncationLines(rawContent || "");
   const readablePlaceholderRe = /^__READABLE_(\d+)__$/;
-  const narrationRegex = /^\s*Narration\s*:\s*(.+)$/i;
-  const legacyDialogueRegex = /^\s*Dialogue\s*\[([^\]]+)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/i;
   const compactDialogueRegex = /^\s*\[([^\]]+)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/;
   const partyLineRegex =
     /^\s*\[([^\]]+)\]\s*\[(main|side|extra|action|thought|whisper(?::([^\]]+))?)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/i;
@@ -5277,8 +5250,6 @@ function truncateMessageContentAtSegment(rawContent: string, segmentIndexInclusi
     const isSpecial =
       readablePlaceholderRe.test(line) ||
       partyLineRegex.test(line) ||
-      narrationRegex.test(line) ||
-      legacyDialogueRegex.test(line) ||
       compactDialogueRegex.test(line);
 
     if (isSpecial) {

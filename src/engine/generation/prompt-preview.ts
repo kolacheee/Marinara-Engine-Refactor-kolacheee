@@ -1,5 +1,5 @@
-import type { ChatMLMessage, GenerationParameters } from "@marinara-engine/shared";
-import type { StorageGateway } from "../capabilities";
+import type { ChatMLMessage, GenerationParameters } from "../contracts/types/prompt";
+import type { StorageGateway } from "../capabilities/storage";
 import { llmParameters, loadChatMessages, requireRecord, resolveGenerationConnection } from "./context";
 import { assembleGenerationPrompt } from "./prompt-assembly";
 import { readNumber, readString } from "./runtime-records";

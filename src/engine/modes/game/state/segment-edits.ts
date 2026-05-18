@@ -1,17 +1,5 @@
-// ──────────────────────────────────────────────
-// Game: Apply segment history overlays to message content
-// ──────────────────────────────────────────────
-//
-// The VN narration UI lets users edit or delete individual narration/dialogue
-// segments. These changes are stored as chat-metadata overlays instead of
-// rewriting the raw message (which has multi-segment text + GM tags).
-//
-// Before sending messages to the model we need to apply those overlays so the
-// model sees the corrected text. This module mirrors the client-side
-// parseNarrationSegments segment-indexing logic just enough to do that.
-// ──────────────────────────────────────────────
-
-import { formatSkillCheckResultSummary, type SkillCheckResult } from "@marinara-engine/shared";
+import type { SkillCheckResult } from "../../../contracts/types/game";
+import { formatSkillCheckResultSummary } from "../../../shared/scoring/skill-check-format";
 
 /**
  * Strip GM command tags from message content.
@@ -183,8 +171,6 @@ interface SegmentEditValue {
 const PARTY_LINE_RE =
   /^\s*\[([^\]]+)\]\s*\[(main|side|extra|action|thought|whisper(?::([^\]]+))?)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/i;
 const COMPACT_DIALOGUE_RE = /^\s*\[([^\]]+)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/;
-const LEGACY_DIALOGUE_RE = /^\s*Dialogue\s*\[([^\]]+)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/i;
-const NARRATION_PREFIX_RE = /^\s*Narration\s*:\s*(.+)$/i;
 const READABLE_PLACEHOLDER_RE = /^__READABLE_\d+__$/;
 
 /** Check if a dialogue content string has surrounding quotes. */
@@ -325,16 +311,8 @@ function parseSegments(stripped: string): ParsedSegment[] {
       continue;
     }
 
-    // Legacy `Narration: text`
-    const narrationMatch = line.match(NARRATION_PREFIX_RE);
-    if (narrationMatch) {
-      flushFallback();
-      segments.push({ originalText: narrationMatch[1]!.trim() });
-      continue;
-    }
-
     // Dialogue
-    const dialogueMatch = line.match(LEGACY_DIALOGUE_RE) || line.match(COMPACT_DIALOGUE_RE);
+    const dialogueMatch = line.match(COMPACT_DIALOGUE_RE);
     if (dialogueMatch) {
       flushFallback();
       const spokenContent = dialogueMatch[3]!.trim();

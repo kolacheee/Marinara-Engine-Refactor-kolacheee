@@ -1,16 +1,4 @@
-// ──────────────────────────────────────────────
-// Agent Pipeline — Phase Orchestration (Batched)
-// ──────────────────────────────────────────────
-// Coordinates the 3 agent phases around the main generation:
-//   1. pre_generation  → inject context before the LLM call
-//   2. parallel        → fire alongside the main generation (no mainResponse)
-//   3. post_processing → analyze/modify the completed response (has mainResponse)
-//
-// Agents that share the same provider+model are BATCHED into a
-// single LLM call to reduce total requests. Agents with different
-// connections are grouped separately and run in parallel.
-// ──────────────────────────────────────────────
-import type { AgentContext, AgentResult } from "@marinara-engine/shared";
+import type { AgentContext, AgentResult } from "../../contracts/types/agent";
 import type { BaseLLMProvider } from "../../generation-core/llm/base-provider.js";
 import {
   executeAgent,

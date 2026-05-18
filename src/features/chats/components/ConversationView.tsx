@@ -34,10 +34,10 @@ import { useUIStore } from "../../../shared/stores/ui.store";
 import { playNotificationPing } from "../../../shared/lib/notification-sound";
 import { getAvatarCropStyle, type AvatarCropValue } from "../../../shared/lib/utils";
 import { characterKeys } from "../../characters/hooks/use-characters";
-import { getConversationStatus } from "../../../engine/modes/chat";
+import { getConversationStatus } from "../../../engine/modes/chat/autonomous/autonomous.service";
 import { storageApi } from "../../../shared/api/storage-api";
 import type { CharacterMap, MessageSelectionToggle, PersonaInfo } from "./chat-area.types";
-import type { Message } from "@marinara-engine/shared";
+import type { Message } from "../../../engine/contracts/types/chat";
 
 const ConversationAutonomousEffects = lazy(async () => {
   const module = await import("./ConversationAutonomousEffects");
@@ -65,6 +65,7 @@ interface ConversationViewProps {
   onEdit: (messageId: string, content: string) => void;
   onSetActiveSwipe: (messageId: string, index: number) => void;
   onPeekPrompt: () => void;
+  onToggleHiddenFromAI?: (messageId: string, current: boolean) => void;
   lastAssistantMessageId: string | null;
   onOpenSettings: () => void;
   onOpenFiles: () => void;
@@ -317,6 +318,7 @@ export function ConversationView({
   onEdit,
   onSetActiveSwipe,
   onPeekPrompt,
+  onToggleHiddenFromAI,
   lastAssistantMessageId,
   onOpenSettings,
   onOpenFiles,
@@ -973,6 +975,7 @@ export function ConversationView({
                   onEdit={onEdit}
                   onSetActiveSwipe={onSetActiveSwipe}
                   onPeekPrompt={onPeekPrompt}
+                  onToggleHiddenFromAI={onToggleHiddenFromAI}
                 />,
               );
               i = j;
@@ -1009,6 +1012,7 @@ export function ConversationView({
                 onEdit={onEdit}
                 onSetActiveSwipe={onSetActiveSwipe}
                 onPeekPrompt={onPeekPrompt}
+                onToggleHiddenFromAI={onToggleHiddenFromAI}
                 isLastAssistantMessage={msg.id === lastAssistantMessageId}
                 characterMap={characterMap}
                 personaInfo={personaInfo as any}
@@ -1140,6 +1144,7 @@ function SplitMessageGroup({
   onEdit,
   onSetActiveSwipe,
   onPeekPrompt,
+  onToggleHiddenFromAI,
 }: {
   items: Array<{ key: string; msg: Message; isGrouped: boolean; index: number }>;
   isStreaming: boolean;
@@ -1155,6 +1160,7 @@ function SplitMessageGroup({
   onEdit: (id: string, content: string) => void;
   onSetActiveSwipe: (id: string, index: number) => void;
   onPeekPrompt: () => void;
+  onToggleHiddenFromAI?: (messageId: string, current: boolean) => void;
 }) {
   const [showActions, setShowActions] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -1195,6 +1201,7 @@ function SplitMessageGroup({
           onEdit={onEdit}
           onSetActiveSwipe={onSetActiveSwipe}
           onPeekPrompt={onPeekPrompt}
+          onToggleHiddenFromAI={onToggleHiddenFromAI}
           isLastAssistantMessage={false}
           characterMap={characterMap}
           chatCharacterIds={chatCharacterIds}
@@ -1270,6 +1277,7 @@ function SplitMessageGroup({
                 onEdit={onEdit}
                 onSetActiveSwipe={onSetActiveSwipe}
                 onPeekPrompt={onPeekPrompt}
+                onToggleHiddenFromAI={onToggleHiddenFromAI}
                 isLastAssistantMessage={false}
                 characterMap={characterMap}
                 chatCharacterIds={chatCharacterIds}
@@ -1296,6 +1304,7 @@ function SplitMessageGroup({
               onEdit={onEdit}
               onSetActiveSwipe={onSetActiveSwipe}
               onPeekPrompt={onPeekPrompt}
+              onToggleHiddenFromAI={onToggleHiddenFromAI}
               onEditClick={handleStartEdit}
               isLastAssistantMessage={firstItem.msg.id === lastAssistantMessageId}
               characterMap={characterMap}
@@ -1323,6 +1332,7 @@ function SplitMessageGroup({
               onEdit={onEdit}
               onSetActiveSwipe={onSetActiveSwipe}
               onPeekPrompt={onPeekPrompt}
+              onToggleHiddenFromAI={isChild ? undefined : onToggleHiddenFromAI}
               onEditClick={handleStartEdit}
               isLastAssistantMessage={msg.id === lastAssistantMessageId}
               characterMap={characterMap}

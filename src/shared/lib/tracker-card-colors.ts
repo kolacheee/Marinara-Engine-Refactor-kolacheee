@@ -1,8 +1,4 @@
-import type {
-  TrackerCardColorConfig,
-  TrackerCardColorMode,
-  TrackerCardPortraitStageBackground,
-} from "@marinara-engine/shared";
+import type { TrackerCardColorConfig, TrackerCardColorMode, TrackerCardPortraitStageBackground } from "../../engine/contracts/types/persona";
 
 export const DEFAULT_TRACKER_CARD_COLOR_MODE: TrackerCardColorMode = "chat";
 export const DEFAULT_TRACKER_CARD_PORTRAIT_STAGE_BACKGROUND: TrackerCardPortraitStageBackground = "ambient";

@@ -1,21 +1,6 @@
-// ──────────────────────────────────────────────
-// Scene Analyzer Prompt
-//
-// System prompt for the configured scene model to
-// analyze a completed narration turn and produce
-// structured scene updates (backgrounds, music,
-// widgets, expressions, weather, etc.).
-// ──────────────────────────────────────────────
-
-import {
-  LOCATION_KINDS,
-  MUSIC_GENRES,
-  MUSIC_INTENSITIES,
-  type HudWidget,
-  type GameNpc,
-  type GameActiveState,
-  type SceneSpotifyTrackCandidate,
-} from "@marinara-engine/shared";
+import type { HudWidget, GameNpc, GameActiveState } from "../../../contracts/types/game";
+import type { SceneSpotifyTrackCandidate } from "../../../contracts/types/scene";
+import { LOCATION_KINDS, MUSIC_GENRES, MUSIC_INTENSITIES } from "../../../shared/scoring/music-score";
 
 export interface SceneAnalyzerContext {
   /** Current game state before this turn. */

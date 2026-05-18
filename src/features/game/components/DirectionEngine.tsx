@@ -6,7 +6,7 @@
 // over the game viewport.
 // ──────────────────────────────────────────────
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
-import type { DirectionCommand } from "@marinara-engine/shared";
+import type { DirectionCommand } from "../../../engine/contracts/types/game";
 import { resolveManagedLocalAssetUrl } from "../../../shared/api/local-file-api";
 
 /** Cross-fading background layer — renders two stacked layers and transitions between them. */

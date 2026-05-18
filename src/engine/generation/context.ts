@@ -1,4 +1,4 @@
-import type { StorageGateway } from "../capabilities";
+import type { StorageGateway } from "../capabilities/storage";
 import { isRecord, parseRecord, readString, type JsonRecord } from "./runtime-records";
 
 export function requireRecord(value: unknown, label: string): JsonRecord {

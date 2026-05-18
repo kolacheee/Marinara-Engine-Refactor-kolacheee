@@ -22,7 +22,7 @@ import {
   useUploadSprite,
   useDeleteSprite,
   useCleanupSavedSprites,
-  useRestoreSpriteCleanupBackup,
+  useRestoreSpriteCleanupPoint,
   useSpriteCapabilities,
   useCharacterVersions,
   useRestoreCharacterVersion,
@@ -87,9 +87,9 @@ import { Modal } from "../../../shared/components/ui/Modal";
 import { SpriteFrameEditor } from "../../../shared/components/ui/SpriteFrameEditor";
 import { SpriteWandCleanupEditor } from "../../../shared/components/ui/SpriteWandCleanupEditor";
 import { ExportFormatDialog, type ExportFormatChoice } from "../../../shared/components/ui/ExportFormatDialog";
-import type { CharacterCardVersion, CharacterData, RPGStatsConfig } from "@marinara-engine/shared";
+import type { CharacterCardVersion, CharacterData, RPGStatsConfig } from "../../../engine/contracts/types/character";
 import { parseTrackerCardColorConfig, serializeTrackerCardColorConfig } from "../../../shared/lib/tracker-card-colors";
-import { downloadBlob, fetchUrlBlob, urlToDataUrl } from "../../../shared/lib/url-blob";
+import { downloadBlob, loadUrlBlob, urlToDataUrl } from "../../../shared/lib/url-blob";
 
 // ── Tabs ──
 const TABS = [
@@ -2091,7 +2091,7 @@ function SpritesTab({
   const uploadSprite = useUploadSprite();
   const deleteSprite = useDeleteSprite();
   const cleanupSavedSprites = useCleanupSavedSprites();
-  const restoreSpriteCleanupBackup = useRestoreSpriteCleanupBackup();
+  const restoreSpriteCleanupPoint = useRestoreSpriteCleanupPoint();
   const queryClient = useQueryClient();
   const [category, setCategory] = useState<SpriteCategory>("expressions");
   const [newExpression, setNewExpression] = useState("");
@@ -2100,7 +2100,7 @@ function SpritesTab({
   const [cleaningSprites, setCleaningSprites] = useState(false);
   const [savedCleanupStrength, setSavedCleanupStrength] = useState(35);
   const [restoringCleanup, setRestoringCleanup] = useState(false);
-  const [lastCleanupBackupId, setLastCleanupBackupId] = useState<string | null>(null);
+  const [lastCleanupRestorePointId, setLastCleanupRestorePointId] = useState<string | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [framingSprite, setFramingSprite] = useState<SpriteInfo | null>(null);
   const [savingFrame, setSavingFrame] = useState(false);
@@ -2129,9 +2129,9 @@ function SpritesTab({
   const spriteGenerationReason = spriteCapabilities?.reason ?? "Sprite generation is unavailable on this platform.";
   const backgroundCleanupUnavailable = spriteCapabilities?.backgroundRemovalAvailable === false;
   const backgroundCleanupReason = spriteCapabilities?.reason ?? "Background cleanup is unavailable on this platform.";
-  const backgroundRemoverUnavailable = spriteCapabilities?.backgroundRemover?.installed === false;
-  const backgroundRemoverReason =
-    spriteCapabilities?.backgroundRemover?.reason ?? "Local backgroundremover is not installed.";
+  const cleanupEngineUnavailable = spriteCapabilities?.cleanupEngine?.installed === false;
+  const cleanupEngineReason =
+    spriteCapabilities?.cleanupEngine?.reason ?? "Built-in sprite cleanup is not available.";
 
   const normalizeExpressionForCategory = (raw: string) => {
     const cleaned = raw
@@ -2243,7 +2243,7 @@ function SpritesTab({
   }, [characterId, deleteSprite, visibleSprites]);
 
   const downloadSpriteFile = useCallback(async (sprite: SpriteInfo) => {
-    const blob = await fetchUrlBlob(sprite.url, { errorMessage: `Failed to download ${sprite.expression}` });
+    const blob = await loadUrlBlob(sprite.url, { errorMessage: `Failed to download ${sprite.expression}` });
     downloadBlob(blob, sprite.filename || `${sprite.expression}.png`);
   }, []);
 
@@ -2287,7 +2287,7 @@ function SpritesTab({
     if (
       !(await showConfirmDialog({
         title: "Clean Sprite Backgrounds",
-        message: `Run the local backgroundremover model on ${visibleSprites.length} saved ${modeLabel} sprite${visibleSprites.length === 1 ? "" : "s"} at strength ${savedCleanupStrength}? Marinara will keep a restore point in case the cleanup looks wrong.`,
+        message: `Run built-in cleanup on ${visibleSprites.length} saved ${modeLabel} sprite${visibleSprites.length === 1 ? "" : "s"} at strength ${savedCleanupStrength}? Marinara will keep a restore point in case the cleanup looks wrong.`,
         confirmLabel: "Clean",
       }))
     ) {
@@ -2300,13 +2300,13 @@ function SpritesTab({
         characterId,
         expressions: visibleSprites.map((sprite) => sprite.expression),
         cleanupStrength: savedCleanupStrength,
-        engine: "backgroundremover",
+        engine: "builtin",
       });
 
       if (result.processed > 0) {
-        setLastCleanupBackupId(result.backupId ?? null);
+        setLastCleanupRestorePointId(result.restorePointId ?? null);
         toast.success(
-          `Cleaned ${result.processed} saved sprite${result.processed === 1 ? "" : "s"} with backgroundremover.`,
+          `Cleaned ${result.processed} saved sprite${result.processed === 1 ? "" : "s"} .`,
         );
       }
       if (result.failed.length > 0) {
@@ -2320,27 +2320,27 @@ function SpritesTab({
   }, [category, characterId, cleanupSavedSprites, savedCleanupStrength, visibleSprites]);
 
   const handleRestoreLastCleanup = useCallback(async () => {
-    if (!lastCleanupBackupId) return;
+    if (!lastCleanupRestorePointId) return;
     setRestoringCleanup(true);
     try {
-      const result = await restoreSpriteCleanupBackup.mutateAsync({
+      const result = await restoreSpriteCleanupPoint.mutateAsync({
         characterId,
-        backupId: lastCleanupBackupId,
+        restorePointId: lastCleanupRestorePointId,
       });
       if (result.restored > 0) {
-        toast.success(`Restored ${result.restored} sprite${result.restored === 1 ? "" : "s"} from the cleanup backup.`);
+        toast.success(`Restored ${result.restored} sprite${result.restored === 1 ? "" : "s"} from the cleanup restore point.`);
       }
       if (result.failed.length > 0) {
         toast.warning(`${result.failed.length} sprite${result.failed.length === 1 ? "" : "s"} could not be restored.`);
       } else {
-        setLastCleanupBackupId(null);
+        setLastCleanupRestorePointId(null);
       }
     } catch (err: any) {
-      toast.error(err?.message || "Failed to restore sprite cleanup backup.");
+      toast.error(err?.message || "Failed to restore sprite cleanup point.");
     } finally {
       setRestoringCleanup(false);
     }
-  }, [characterId, lastCleanupBackupId, restoreSpriteCleanupBackup]);
+  }, [characterId, lastCleanupRestorePointId, restoreSpriteCleanupPoint]);
 
   const handleApplySpriteFrame = useCallback(
     async (croppedDataUrl: string) => {
@@ -2464,16 +2464,16 @@ function SpritesTab({
               disabled={
                 cleaningSprites ||
                 backgroundCleanupUnavailable ||
-                backgroundRemoverUnavailable ||
+                cleanupEngineUnavailable ||
                 visibleSprites.length === 0
               }
               className="flex min-w-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--secondary)] px-3 py-1.5 text-center text-[0.6875rem] font-medium leading-tight text-[var(--muted-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-40 max-md:flex-1 max-md:basis-[calc(50%-0.25rem)] max-md:px-2.5"
               title={
                 backgroundCleanupUnavailable
                   ? backgroundCleanupReason
-                  : backgroundRemoverUnavailable
-                    ? backgroundRemoverReason
-                    : "Run the local backgroundremover model on the currently visible saved sprites"
+                  : cleanupEngineUnavailable
+                    ? cleanupEngineReason
+                    : "Run built-in cleanup on the currently visible saved sprites"
               }
             >
               {cleaningSprites ? <Loader2 size="0.8125rem" className="animate-spin" /> : <Eraser size="0.8125rem" />}
@@ -2551,10 +2551,10 @@ function SpritesTab({
         {cleaningSprites && (
           <div className="flex items-center gap-2 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
             <Loader2 size="0.75rem" className="animate-spin text-[var(--primary)]" />
-            Running local backgroundremover on saved sprites…
+            Cleaning saved sprites…
           </div>
         )}
-        {lastCleanupBackupId && (
+        {lastCleanupRestorePointId && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
             <span>Last cleanup has a restore point.</span>
             <button
@@ -2578,9 +2578,9 @@ function SpritesTab({
             {backgroundCleanupReason}
           </div>
         )}
-        {backgroundRemoverUnavailable && !backgroundCleanupUnavailable && (
+        {cleanupEngineUnavailable && !backgroundCleanupUnavailable && (
           <div className="rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
-            {backgroundRemoverReason}
+            {cleanupEngineReason}
           </div>
         )}
         <div className="flex gap-2">

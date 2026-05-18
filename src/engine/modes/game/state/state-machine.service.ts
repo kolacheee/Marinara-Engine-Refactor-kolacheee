@@ -1,8 +1,4 @@
-// ──────────────────────────────────────────────
-// Game: State Machine Service
-// ──────────────────────────────────────────────
-
-import type { GameActiveState } from "@marinara-engine/shared";
+import type { GameActiveState } from "../../../contracts/types/game";
 
 const GAME_STATES: readonly GameActiveState[] = ["exploration", "dialogue", "combat", "travel_rest"];
 

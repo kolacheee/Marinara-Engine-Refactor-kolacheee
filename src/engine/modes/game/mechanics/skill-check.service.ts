@@ -1,12 +1,4 @@
-// ──────────────────────────────────────────────
-// Service: Skill Check Resolution
-//
-// Resolves d20-based skill checks using player
-// stats. Supports advantage/disadvantage, crits,
-// and attribute-linked modifiers.
-// ──────────────────────────────────────────────
-
-import type { RPGAttributes } from "@marinara-engine/shared";
+import type { RPGAttributes } from "../../../contracts/types/game-state";
 
 export interface SkillCheckInput {
   /** Skill name (e.g. "Perception", "Stealth"). */

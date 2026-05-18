@@ -542,9 +542,9 @@ export function SpriteGenerationModal({
   }, [connectionsList]);
   const spriteGenerationUnavailable = spriteCapabilities?.spriteGenerationAvailable === false;
   const spriteGenerationReason = spriteCapabilities?.reason ?? "Sprite generation is unavailable on this platform.";
-  const backgroundRemoverUnavailable = spriteCapabilities?.backgroundRemover?.installed === false;
-  const backgroundRemoverReason =
-    spriteCapabilities?.backgroundRemover?.reason ?? "Local backgroundremover is not installed.";
+  const cleanupEngineUnavailable = spriteCapabilities?.cleanupEngine?.installed === false;
+  const cleanupEngineReason =
+    spriteCapabilities?.cleanupEngine?.reason ?? "Built-in sprite cleanup is not available.";
   const existingPortraitExpressions = useMemo(() => {
     const seen = new Set<string>();
     const names: string[] = [];
@@ -986,7 +986,7 @@ export function SpriteGenerationModal({
     try {
       const result = await api.post<{ cells: Array<{ expression: string; base64: string }> }>("/sprites/cleanup", {
         cleanupStrength,
-        engine: "backgroundremover",
+        engine: "builtin",
         cells: cells.map((cell) => ({
           expression: cell.expression,
           base64: cell.rawDataUrl,
@@ -1900,9 +1900,9 @@ export function SpriteGenerationModal({
                       <span className="text-[0.6875rem] text-[var(--muted-foreground)]">{cleanupStrength}</span>
                       <button
                         onClick={handleApplyCleanup}
-                        disabled={cleanupApplying || backgroundRemoverUnavailable || cells.length === 0}
+                        disabled={cleanupApplying || cleanupEngineUnavailable || cells.length === 0}
                         className="rounded-lg bg-[var(--primary)] px-2.5 py-1 text-[0.6875rem] font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
-                        title={backgroundRemoverUnavailable ? backgroundRemoverReason : "Run local backgroundremover"}
+                        title={cleanupEngineUnavailable ? cleanupEngineReason : "Run built-in cleanup"}
                       >
                         {cleanupApplying ? "Applying..." : cleanupApplied ? "Reapply Cleanup" : "Apply Cleanup"}
                       </button>
@@ -1921,8 +1921,8 @@ export function SpriteGenerationModal({
                 <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
                   Cleanup only runs when you press Apply Cleanup, using the current slices without regenerating.
                 </p>
-                {backgroundRemoverUnavailable && noBackground && (
-                  <p className="mt-1 text-[0.625rem] text-amber-300/80">{backgroundRemoverReason}</p>
+                {cleanupEngineUnavailable && noBackground && (
+                  <p className="mt-1 text-[0.625rem] text-amber-300/80">{cleanupEngineReason}</p>
                 )}
               </div>
               {activeFrameCell && (

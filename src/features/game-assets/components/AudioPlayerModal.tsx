@@ -2,7 +2,7 @@
 // File Browser — Audio player with format fallback
 // ──────────────────────────────────────────────
 import { useEffect, useState } from "react";
-import { AUDIO_MIME_MAP } from "@marinara-engine/shared";
+import { AUDIO_MIME_MAP } from "../../../engine/contracts/constants/game-assets";
 import { resolveGameAssetFileUrl } from "../../../shared/api/local-file-api";
 
 /**

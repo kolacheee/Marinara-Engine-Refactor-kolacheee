@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 import { z } from "zod";
 
-export const toolExecutionTypeSchema = z.enum(["webhook", "static", "script"]);
+export const toolExecutionTypeSchema = z.enum(["webhook", "static"]);
 
 export const createCustomToolSchema = z.object({
   name: z
@@ -16,7 +16,6 @@ export const createCustomToolSchema = z.object({
   executionType: toolExecutionTypeSchema.default("static"),
   webhookUrl: z.string().url().nullable().default(null),
   staticResult: z.string().nullable().default(null),
-  scriptBody: z.string().nullable().default(null),
   enabled: z.boolean().default(true),
 });
 

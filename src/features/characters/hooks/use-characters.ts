@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../shared/api/api-client";
-import type { CharacterCardVersion } from "@marinara-engine/shared";
+import type { CharacterCardVersion } from "../../../engine/contracts/types/character";
 
 export const characterKeys = {
   all: ["characters"] as const,
@@ -137,14 +137,14 @@ export interface SpriteInfo {
   url: string;
 }
 
-export type SpriteCleanupEngine = "auto" | "backgroundremover" | "builtin";
+export type SpriteCleanupEngine = "auto" | "builtin";
 
 export interface SpriteCapabilities {
   imageProcessingAvailable: boolean;
   spriteGenerationAvailable: boolean;
   backgroundRemovalAvailable: boolean;
   reason: string | null;
-  backgroundRemover?: {
+  cleanupEngine?: {
     engine: SpriteCleanupEngine;
     installed: boolean;
     command: string | null;
@@ -157,9 +157,9 @@ export interface SpriteCapabilities {
 export interface SpriteCleanupResult {
   processed: number;
   failed: Array<{ expression: string; error: string }>;
-  backupId?: string | null;
+  restorePointId?: string | null;
   engine?: SpriteCleanupEngine;
-  backgroundRemoverProcessed?: number;
+  externalCleanupProcessed?: number;
   builtinProcessed?: number;
   sprites: SpriteInfo[];
   error?: string;
@@ -249,11 +249,11 @@ export function useCleanupSavedSprites() {
   });
 }
 
-export function useRestoreSpriteCleanupBackup() {
+export function useRestoreSpriteCleanupPoint() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ characterId, backupId }: { characterId: string; backupId: string }) =>
-      api.post<SpriteCleanupRestoreResult>(`/sprites/${characterId}/cleanup-restore`, { backupId }),
+    mutationFn: ({ characterId, restorePointId }: { characterId: string; restorePointId: string }) =>
+      api.post<SpriteCleanupRestoreResult>(`/sprites/${characterId}/cleanup-restore`, { restorePointId }),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: spriteKeys.list(variables.characterId) });
     },

@@ -123,6 +123,8 @@ export interface ChatMemoryChunk {
   createdAt: string;
   /** False when chunking succeeded but embedding generation was unavailable. */
   hasEmbedding: boolean;
+  /** Local lexical recall vector used by the Tauri prompt assembler. */
+  embedding?: number[] | null;
   /** Current vectorization state for display. */
   embeddingStatus?: "vectorized" | "pending" | "unavailable";
 }

@@ -1,4 +1,4 @@
-import type { StorageGateway } from "../capabilities";
+import type { StorageGateway } from "../capabilities/storage";
 import { newId, nowIso, parseArray, readString, type JsonRecord } from "./runtime-records";
 
 export interface ConnectedCommandResult {

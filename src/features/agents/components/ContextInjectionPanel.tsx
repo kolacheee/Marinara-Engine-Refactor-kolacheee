@@ -5,8 +5,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Minus, Plus, RefreshCw, Save } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BUILT_IN_AGENTS, getDefaultBuiltInAgentSettings } from "@marinara-engine/shared";
-import type { Message } from "@marinara-engine/shared";
+import { BUILT_IN_AGENTS, getDefaultBuiltInAgentSettings } from "../../../engine/contracts/types/agent";
+import type { Message } from "../../../engine/contracts/types/chat";
 import { cn } from "../../../shared/lib/utils";
 import { api } from "../../../shared/api/api-client";
 import { chatKeys, useUpdateMessageExtra } from "../../chats/hooks/use-chats";

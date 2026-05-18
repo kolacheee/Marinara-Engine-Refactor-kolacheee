@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Braces, CheckCircle2, Loader2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
-import { api, type JsonRepairRequest } from "../../../shared/api/api-client";
+import type { JsonRepairRequest } from "../../../shared/api/api-client";
+import { applyGameJsonRepair } from "../api/game-api";
 import { cn } from "../../../shared/lib/utils";
 import { Modal } from "../../../shared/components/ui/Modal";
 
@@ -33,12 +34,12 @@ function validateJson(raw: string): { valid: true; parsed: unknown } | { valid: 
 export function GameJsonRepairModal({ request, onClose, onApplied }: GameJsonRepairModalProps) {
   const [draft, setDraft] = useState("");
   const [isApplying, setIsApplying] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const lineNumbersRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
     setDraft(request?.rawJson ?? "");
-    setServerError(null);
+    setApplyError(null);
     setIsApplying(false);
   }, [request]);
 
@@ -61,17 +62,14 @@ export function GameJsonRepairModal({ request, onClose, onApplied }: GameJsonRep
   const handleApply = async () => {
     if (!request || !validation.valid || isApplying) return;
     setIsApplying(true);
-    setServerError(null);
+    setApplyError(null);
     try {
-      const result = await api.post(request.applyEndpoint, {
-        ...(request.applyBody ?? {}),
-        rawJson: draft,
-      });
+      const result = await applyGameJsonRepair(request, draft);
       toast.success("Repaired JSON applied.");
       onApplied(result, request);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to apply repaired JSON.";
-      setServerError(message);
+      setApplyError(message);
       toast.error(message);
     } finally {
       setIsApplying(false);
@@ -108,9 +106,9 @@ export function GameJsonRepairModal({ request, onClose, onApplied }: GameJsonRep
           <span>{validation.valid ? "JSON is valid." : validation.error}</span>
         </div>
 
-        {serverError && (
+        {applyError && (
           <div className="rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 px-3 py-2 text-xs text-[var(--destructive)]">
-            {serverError}
+            {applyError}
           </div>
         )}
 
@@ -126,7 +124,7 @@ export function GameJsonRepairModal({ request, onClose, onApplied }: GameJsonRep
             value={draft}
             onChange={(event) => {
               setDraft(event.target.value);
-              setServerError(null);
+              setApplyError(null);
             }}
             onScroll={(event) => {
               if (lineNumbersRef.current) {

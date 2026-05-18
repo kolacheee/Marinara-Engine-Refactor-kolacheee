@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { formDataToJson } from "./file-payload";
 
 export const ADMIN_SECRET_STORAGE_KEY = "marinara-admin-secret";
 
@@ -60,37 +61,6 @@ async function request<T>(method: string, path: string, body?: unknown, init?: R
   } catch (error) {
     throw normalizeApiError(error);
   }
-}
-
-async function formDataToJson(body: FormData): Promise<Record<string, unknown>> {
-  const entries: Record<string, unknown> = {};
-  const appendEntry = (key: string, value: unknown) => {
-    const existing = entries[key];
-    if (existing === undefined) {
-      entries[key] = value;
-    } else if (Array.isArray(existing)) {
-      existing.push(value);
-    } else {
-      entries[key] = [existing, value];
-    }
-  };
-  for (const [key, value] of body.entries()) {
-    if (value instanceof File) {
-      const buffer = await value.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      let binary = "";
-      for (const byte of bytes) binary += String.fromCharCode(byte);
-      appendEntry(key, {
-        name: value.name,
-        type: value.type,
-        size: value.size,
-        base64: btoa(binary),
-      });
-    } else {
-      appendEntry(key, value);
-    }
-  }
-  return entries;
 }
 
 function downloadJson(value: unknown, fallbackFilename: string) {

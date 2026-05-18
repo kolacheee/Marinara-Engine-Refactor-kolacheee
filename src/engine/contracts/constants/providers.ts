@@ -25,17 +25,6 @@ export const PROVIDERS: Record<APIProvider, ProviderDefinition> = {
     usesAuthHeader: true,
     apiKeyHeader: null,
   },
-  openai_chatgpt: {
-    id: "openai_chatgpt",
-    name: "OpenAI (ChatGPT)",
-    // No user-entered endpoint or API key. Marinara reads the local Codex
-    // ChatGPT login and routes through ChatGPT's Codex backend.
-    defaultBaseUrl: "",
-    modelsEndpoint: "",
-    supportsStreaming: true,
-    usesAuthHeader: false,
-    apiKeyHeader: null,
-  },
   anthropic: {
     id: "anthropic",
     name: "Anthropic",
@@ -44,18 +33,6 @@ export const PROVIDERS: Record<APIProvider, ProviderDefinition> = {
     supportsStreaming: true,
     usesAuthHeader: false,
     apiKeyHeader: "x-api-key",
-  },
-  claude_subscription: {
-    id: "claude_subscription",
-    name: "Claude (Subscription)",
-    // No base URL — the Claude Agent SDK reads credentials stored locally by the
-    // Claude Code CLI (`claude login`) and routes requests through Anthropic's
-    // first-party endpoints on behalf of the signed-in Pro / Max account.
-    defaultBaseUrl: "",
-    modelsEndpoint: "",
-    supportsStreaming: true,
-    usesAuthHeader: false,
-    apiKeyHeader: null,
   },
   google: {
     id: "google",

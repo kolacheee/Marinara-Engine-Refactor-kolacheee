@@ -1,4 +1,4 @@
-import type { Chat } from "@marinara-engine/shared";
+import type { Chat } from "../../engine/contracts/types/chat";
 
 export type ChatDisplaySource = {
   name: string;

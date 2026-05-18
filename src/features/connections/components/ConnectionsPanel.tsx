@@ -19,7 +19,7 @@ import {
 } from "../hooks/use-connection-folders";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
-import { type ConnectionFolder } from "@marinara-engine/shared";
+import type { ConnectionFolder } from "../../../engine/contracts/types/connection";
 import { showConfirmDialog } from "../../../shared/lib/app-dialogs";
 import { Modal } from "../../../shared/components/ui/Modal";
 import {

@@ -3,8 +3,7 @@
 // ──────────────────────────────────────────────
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../shared/api/api-client";
-import type { ClaudeSubscriptionDiagnosis, ConnectionRow, ConnectionTestResult } from "../types";
-export type { ClaudeSubscriptionDiagnosis } from "../types";
+import type { ConnectionRow, ConnectionTestResult } from "../types";
 
 export const connectionKeys = {
   all: ["connections"] as const,
@@ -81,13 +80,6 @@ export function useTestMessage() {
   return useMutation({
     mutationFn: (id: string) =>
       api.post<{ success: boolean; response: string; latencyMs: number }>(`/connections/${id}/test-message`),
-  });
-}
-
-export function useDiagnoseClaudeSubscription() {
-  return useMutation({
-    mutationFn: (id: string) =>
-      api.post<ClaudeSubscriptionDiagnosis>(`/connections/${id}/diagnose-claude-subscription`),
   });
 }
 

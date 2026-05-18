@@ -72,8 +72,8 @@ import {
 import { cn } from "../../../shared/lib/utils";
 import { HelpTooltip } from "../../../shared/components/ui/HelpTooltip";
 import { api } from "../../../shared/api/api-client";
-import type { Lorebook, LorebookEntry, LorebookFolder, LorebookCategory } from "@marinara-engine/shared";
-import { testPrimaryKeys, testSecondaryKeys } from "@marinara-engine/shared";
+import type { Lorebook, LorebookEntry, LorebookFolder, LorebookCategory } from "../../../engine/contracts/types/lorebook";
+import { testPrimaryKeys, testSecondaryKeys } from "../../../engine/shared/regex/lorebook-keyword-matching";
 import { LorebookEntryRow } from "./LorebookEntryRow";
 import { LorebookFolderRow } from "./LorebookFolderRow";
 import { ExpandableTextarea, estimateTokens } from "./LorebookFormFields";

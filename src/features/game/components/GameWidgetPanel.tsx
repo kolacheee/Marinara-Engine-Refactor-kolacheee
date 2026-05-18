@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { HudWidget } from "@marinara-engine/shared";
+import type { HudWidget } from "../../../engine/contracts/types/game";
 import { useUpdateGameWidgets } from "../hooks/use-game";
 import { cn } from "../../../shared/lib/utils";
 import { useGameModeStore } from "../stores/game-mode.store";

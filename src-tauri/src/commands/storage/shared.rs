@@ -415,39 +415,6 @@ pub(crate) fn string_array_from_value(value: Option<&Value>) -> Vec<String> {
     }
 }
 
-pub(crate) const BACKUP_COLLECTIONS: &[&str] = &[
-    "app-settings",
-    "characters",
-    "character-groups",
-    "character-versions",
-    "character-gallery",
-    "personas",
-    "persona-groups",
-    "chats",
-    "chat-folders",
-    "gallery",
-    "messages",
-    "connections",
-    "connection-folders",
-    "prompts",
-    "prompt-groups",
-    "prompt-sections",
-    "prompt-variables",
-    "chat-presets",
-    "lorebooks",
-    "lorebook-entries",
-    "lorebook-folders",
-    "agents",
-    "agent-runs",
-    "custom-tools",
-    "themes",
-    "extensions",
-    "regex-scripts",
-    "sprites",
-    "knowledge-sources",
-    "background-metadata",
-];
-
 #[derive(Clone)]
 pub(crate) struct UploadedFile {
     pub(crate) name: String,

@@ -1,7 +1,7 @@
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { useChat, useChatMessages, useDeleteMessage } from "../../chats/hooks/use-chats";
-import type { Chat, Message } from "@marinara-engine/shared";
+import type { Chat, Message } from "../../../engine/contracts/types/chat";
 import { GameSurface } from "./GameSurface";
 
 interface GameConversationViewProps {

@@ -1,4 +1,4 @@
-import type { SpritePlacement, SpriteSide } from "@marinara-engine/shared";
+import type { SpritePlacement, SpriteSide } from "../../../engine/contracts/types/chat";
 
 export type SpritePlacementMap = Record<string, SpritePlacement>;
 

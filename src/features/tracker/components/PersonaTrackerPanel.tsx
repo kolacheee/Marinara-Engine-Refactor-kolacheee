@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { HeartPulse, Package, Sparkles, X } from "lucide-react";
-import type { CharacterStat, InventoryItem, Persona } from "@marinara-engine/shared";
+import type { CharacterStat, InventoryItem } from "../../../engine/contracts/types/game-state";
+import type { Persona } from "../../../engine/contracts/types/persona";
 import { useCharacterSprites, type SpriteInfo } from "../../characters/hooks/use-characters";
 import { cn } from "../../../shared/lib/utils";
 import type { PersonaPortraitMode } from "./tracker-data-sidebar.constants";

@@ -12,7 +12,7 @@ import {
   Shirt,
   X,
 } from "lucide-react";
-import type { CharacterStat, PresentCharacter } from "@marinara-engine/shared";
+import type { CharacterStat, PresentCharacter } from "../../../engine/contracts/types/game-state";
 import type { TrackerPanelSide } from "../../../shared/stores/ui.store";
 import { useCharacterSprites, type SpriteInfo } from "../../characters/hooks/use-characters";
 import { cn } from "../../../shared/lib/utils";

@@ -51,7 +51,9 @@ import {
   Drama,
   RotateCcw,
   Music2,
+  Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn, getAvatarCropStyle, type AvatarCrop } from "../../../shared/lib/utils";
 import { showAlertDialog, showConfirmDialog, showPromptDialog } from "../../../shared/lib/app-dialogs";
 import { HelpTooltip } from "../../../shared/components/ui/HelpTooltip";
@@ -82,6 +84,8 @@ import {
   useDeleteChatMemory,
   useClearChatMemories,
   useRefreshChatMemories,
+  useExportChatMemories,
+  useImportChatMemories,
   useChatNotes,
   useDeleteChatNote,
   useClearChatNotes,
@@ -111,33 +115,19 @@ import {
   useImportChatPreset,
   useSetActiveChatPreset,
 } from "../../chat-presets/hooks/use-chat-presets";
-import type {
-  AgentPhase,
-  ChatMode,
-  ChatMemoryChunk,
-  ChatPreset,
-  ChatPresetSettings,
-  ConversationNote,
-} from "@marinara-engine/shared";
+import type { AgentPhase } from "../../../engine/contracts/types/agent";
+import type { ChatMode, ChatMemoryChunk, ConversationNote } from "../../../engine/contracts/types/chat";
+import type { ChatPreset, ChatPresetSettings } from "../../../engine/contracts/types/chat-preset";
 import { useAgentConfigs, useCreateAgent, useUpdateAgent, type AgentConfigRow } from "../../agents/hooks/use-agents";
 import { useAgentStore } from "../../../shared/stores/agent.store";
-import {
-  BUILT_IN_AGENTS,
-  BUILT_IN_TOOLS,
-  DEFAULT_AGENT_CONTEXT_SIZE,
-  DEFAULT_AGENT_TOOLS,
-  DEFAULT_IMPERSONATE_PROMPT,
-  DEFAULT_AGENT_MAX_TOKENS,
-  DEFAULT_AGENT_PROMPTS,
-  LIMITS,
-  MAX_AGENT_MAX_TOKENS,
-  MIN_AGENT_MAX_TOKENS,
-  estimateAgentLoadCost,
-  AGENT_COST_HIGH_CALLS,
-  AGENT_COST_HIGH_TOKENS,
-  getDefaultBuiltInAgentSettings,
-} from "@marinara-engine/shared";
-import type { Chat, CharacterGroup, Lorebook } from "@marinara-engine/shared";
+import { DEFAULT_AGENT_PROMPTS } from "../../../engine/contracts/constants/agent-prompts";
+import { LIMITS } from "../../../engine/contracts/constants/defaults";
+import { DEFAULT_IMPERSONATE_PROMPT } from "../../../engine/contracts/constants/impersonate";
+import { BUILT_IN_AGENTS, BUILT_IN_TOOLS, DEFAULT_AGENT_CONTEXT_SIZE, DEFAULT_AGENT_TOOLS, DEFAULT_AGENT_MAX_TOKENS, MAX_AGENT_MAX_TOKENS, MIN_AGENT_MAX_TOKENS, getDefaultBuiltInAgentSettings } from "../../../engine/contracts/types/agent";
+import { estimateAgentLoadCost, AGENT_COST_HIGH_CALLS, AGENT_COST_HIGH_TOKENS } from "../../../engine/shared/scoring/agent-cost";
+import type { CharacterGroup } from "../../../engine/contracts/types/character";
+import type { Chat } from "../../../engine/contracts/types/chat";
+import type { Lorebook } from "../../../engine/contracts/types/lorebook";
 import {
   isCustomToolSelectable,
   useCustomToolCapabilities,
@@ -3056,7 +3046,6 @@ export function ChatSettingsDrawer({
                     <SelfiePromptControls
                       promptTemplate={metadata.selfiePrompt as string | null | undefined}
                       positivePrompt={metadata.selfiePositivePrompt as string | undefined}
-                      legacyTags={(metadata.selfieTags as string[]) ?? []}
                       negativePrompt={(metadata.selfieNegativePrompt as string) ?? ""}
                       onCommitPromptTemplate={(selfiePrompt) => updateMeta.mutate({ id: chat.id, selfiePrompt })}
                       onCommitPositivePrompt={(selfiePositivePrompt) =>
@@ -4632,7 +4621,7 @@ export function ChatSettingsDrawer({
             <Section
               label="Memory Recall"
               icon={<Brain size="0.875rem" />}
-              help="When enabled, relevant fragments from this chat are automatically recalled and injected into the prompt as memories. Uses the local embedding model when available, or the configured embedding connection."
+              help="When enabled, relevant fragments from this chat are recalled with local lexical matching and injected into the prompt as memories."
             >
               {renderMemoryRecallControls(true)}
             </Section>
@@ -4934,7 +4923,7 @@ export function ChatSettingsDrawer({
             <Section
               label="Memory Recall"
               icon={<Brain size="0.875rem" />}
-              help="When enabled, relevant fragments from this chat are automatically recalled and injected into the prompt as memories. Uses the local embedding model when available, or the configured embedding connection."
+              help="When enabled, relevant fragments from this chat are recalled with local lexical matching and injected into the prompt as memories."
             >
               {renderMemoryRecallControls(metadata.sceneStatus === "active")}
             </Section>
@@ -5574,8 +5563,40 @@ function MemoryRecallMemoriesModal({ chatId, open, onClose }: { chatId: string; 
   const deleteMemory = useDeleteChatMemory(chatId);
   const clearMemories = useClearChatMemories(chatId);
   const refreshMemories = useRefreshChatMemories(chatId);
+  const exportMemories = useExportChatMemories(chatId);
+  const importMemories = useImportChatMemories(chatId);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const memories = useMemo(() => memoriesQuery.data ?? [], [memoriesQuery.data]);
   const totalTokens = useMemo(() => estimateMemoryTokens(memories), [memories]);
+
+  const handleExport = async () => {
+    if (memories.length === 0) {
+      toast.error("There are no recall memories to export yet.");
+      return;
+    }
+    try {
+      await exportMemories.mutateAsync();
+      toast.success("Memory Recall exported.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to export Memory Recall.");
+    }
+  };
+
+  const handleImportFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const result = await importMemories.mutateAsync(file);
+      if (result.imported > 0) {
+        toast.success(`Imported ${result.imported} memor${result.imported === 1 ? "y" : "ies"}.`);
+      } else {
+        toast.info("No new recall memories were imported.");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to import Memory Recall.");
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  };
 
   const handleDelete = async (memory: ChatMemoryChunk) => {
     const ok = await showConfirmDialog({
@@ -5613,10 +5634,35 @@ function MemoryRecallMemoriesModal({ chatId, open, onClose }: { chatId: string; 
             )}
           </div>
           <div className="flex items-center gap-1">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => void handleImportFile(event.currentTarget.files?.[0])}
+            />
+            <button
+              type="button"
+              onClick={() => void handleExport()}
+              disabled={memories.length === 0 || exportMemories.isPending}
+              className="rounded-lg p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-40"
+              title="Export memories"
+            >
+              <Download size="0.8125rem" />
+            </button>
+            <button
+              type="button"
+              onClick={() => importInputRef.current?.click()}
+              disabled={importMemories.isPending}
+              className="rounded-lg p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-40"
+              title="Import memories"
+            >
+              {importMemories.isPending ? <Loader2 size="0.8125rem" className="animate-spin" /> : <Upload size="0.8125rem" />}
+            </button>
             <button
               type="button"
               onClick={() => refreshMemories.mutate()}
-              disabled={memoriesQuery.isFetching || refreshMemories.isPending}
+              disabled={memoriesQuery.isFetching || refreshMemories.isPending || importMemories.isPending}
               className="rounded-lg p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-50"
               title="Rebuild memories from current chat messages"
             >
@@ -6317,7 +6363,6 @@ interface ScheduleBlock {
 function SelfiePromptControls({
   promptTemplate,
   positivePrompt,
-  legacyTags,
   negativePrompt,
   onCommitPromptTemplate,
   onCommitPositivePrompt,
@@ -6325,14 +6370,12 @@ function SelfiePromptControls({
 }: {
   promptTemplate: string | null | undefined;
   positivePrompt: string | undefined;
-  legacyTags: string[];
   negativePrompt: string;
   onCommitPromptTemplate: (value: string | null) => void;
   onCommitPositivePrompt: (value: string) => void;
   onCommitNegativePrompt: (value: string) => void;
 }) {
-  const legacyTagText = legacyTags.join(", ");
-  const displayPositivePrompt = positivePrompt ?? legacyTagText;
+  const displayPositivePrompt = positivePrompt ?? "";
   const displayPromptTemplate = promptTemplate ?? "";
   const [promptDraft, setPromptDraft] = useState(displayPromptTemplate);
   const [positiveDraft, setPositiveDraft] = useState(displayPositivePrompt);

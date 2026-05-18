@@ -5,9 +5,7 @@ import { z } from "zod";
 
 export const apiProviderSchema = z.enum([
   "openai",
-  "openai_chatgpt",
   "anthropic",
-  "claude_subscription",
   "google",
   "google_vertex",
   "mistral",
@@ -42,7 +40,6 @@ export const createConnectionSchema = z.object({
   promptPresetId: z.string().nullable().default(null),
   maxTokensOverride: z.number().int().min(1).nullable().default(null),
   maxParallelJobs: z.number().int().min(1).max(16).default(1),
-  claudeFastMode: z.boolean().default(false),
 });
 
 export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;

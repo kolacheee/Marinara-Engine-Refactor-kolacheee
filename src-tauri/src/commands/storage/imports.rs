@@ -3,7 +3,9 @@ use super::media_uploads::{
 };
 use super::shared::*;
 use super::*;
+#[path = "imports/bulk_imports.rs"]
 mod bulk_imports;
+#[path = "imports/timestamps.rs"]
 mod timestamps;
 use std::collections::HashMap;
 use std::io::{Cursor, Read};
@@ -979,14 +981,14 @@ fn inspect_st_character_batch(body: Value) -> AppResult<Value> {
     Ok(json!({ "success": true, "results": results }))
 }
 
-fn import_marinara_package(state: &AppState, body: Value) -> AppResult<Value> {
+fn import_marinara_file(state: &AppState, body: Value) -> AppResult<Value> {
     let uploaded = decode_uploaded_file_value(
         body.get("file")
             .ok_or_else(|| AppError::invalid_input("file is required"))?,
     )?;
     if uploaded.bytes.len() < 4 || uploaded.bytes[0] != 0x50 || uploaded.bytes[1] != 0x4b {
         return Err(AppError::invalid_input(
-            "Not a .marinara package (zip signature missing)",
+            "Not a .marinara file (zip signature missing)",
         ));
     }
 
@@ -996,16 +998,16 @@ fn import_marinara_package(state: &AppState, body: Value) -> AppResult<Value> {
     const MAX_AVATAR_BYTES: usize = 20 * 1024 * 1024;
     if names.len() > MAX_PACKAGE_ENTRIES {
         return Err(AppError::invalid_input(
-            ".marinara package has too many entries",
+            ".marinara file has too many entries",
         ));
     }
 
     let data_entry = zip_entry_name_case_insensitive(&names, "data.json")
-        .ok_or_else(|| AppError::invalid_input(".marinara package is missing data.json"))?;
+        .ok_or_else(|| AppError::invalid_input(".marinara file is missing data.json"))?;
     let data_bytes = read_zip_entry(&uploaded.bytes, &data_entry)?
-        .ok_or_else(|| AppError::invalid_input(".marinara package is missing data.json"))?;
+        .ok_or_else(|| AppError::invalid_input(".marinara file is missing data.json"))?;
     if data_bytes.len() > MAX_DATA_JSON_BYTES {
-        return Err(AppError::invalid_input("data.json in package is too large"));
+        return Err(AppError::invalid_input("data.json in .marinara file is too large"));
     }
     let mut envelope = parse_object(&data_bytes)?;
 
@@ -1026,10 +1028,10 @@ fn import_marinara_package(state: &AppState, body: Value) -> AppResult<Value> {
         .cloned();
     if let Some(avatar_name) = avatar_name {
         let avatar = read_zip_entry(&uploaded.bytes, &avatar_name)?
-            .ok_or_else(|| AppError::invalid_input("Could not read package avatar"))?;
+            .ok_or_else(|| AppError::invalid_input("Could not read .marinara avatar"))?;
         if avatar.len() > MAX_AVATAR_BYTES {
             return Err(AppError::invalid_input(
-                "Avatar image in package is too large",
+                "Avatar image in .marinara file is too large",
             ));
         }
         let mime = image_mime_from_path(&avatar_name);
@@ -1665,7 +1667,7 @@ pub(crate) fn import_call(state: &AppState, rest: &[&str], body: Value) -> AppRe
             let payload = import_payload(body)?;
             import_marinara_envelope(state, payload)
         }
-        ["marinara-package"] => import_marinara_package(state, body),
+        ["marinara-file"] => import_marinara_file(state, body),
         ["st-character"] => import_st_character(state, body),
         ["st-character", "batch"] => import_st_character_batch(state, body),
         ["st-character", "inspect"] => inspect_st_character_batch(body),

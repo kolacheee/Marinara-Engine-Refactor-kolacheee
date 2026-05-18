@@ -11,8 +11,7 @@ import { cn } from "../../../shared/lib/utils";
 import { gameApi } from "../api/game-api";
 import { applyInlineMarkdown, renderMarkdownBlocks } from "../../../shared/lib/markdown";
 import { AnimatedText } from "./AnimatedText";
-
-import type { GameNpc } from "@marinara-engine/shared";
+import type { GameNpc } from "../../../engine/contracts/types/game";
 
 interface JournalEntry {
   timestamp: string;

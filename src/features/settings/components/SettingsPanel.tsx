@@ -13,15 +13,14 @@ import {
 import { cn } from "../../../shared/lib/utils";
 import { useExtensions, useCreateExtension, useDeleteExtension, useUpdateExtension } from "../hooks/use-extensions";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ADMIN_SECRET_STORAGE_KEY, ApiError, api } from "../../../shared/api/api-client";
-import { backupApi } from "../../../shared/api/backup-api";
+import { ADMIN_SECRET_STORAGE_KEY, api } from "../../../shared/api/api-client";
 import { importApi } from "../../../shared/api/import-api";
+import { profileApi } from "../../../shared/api/profile-api";
 import { chatBackgroundMetadataToUrl, chatBackgroundUrlToMetadata } from "../../../shared/lib/backgrounds";
 import { filePathToAssetUrl, resolveManagedLocalAssetUrl, userBackgroundUrl } from "../../../shared/api/local-file-api";
-import { forceRefreshSpa } from "../../../shared/lib/browser-runtime";
 import React, { useRef, useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
-import { APP_VERSION, type Theme } from "@marinara-engine/shared";
+import type { Theme } from "../../../engine/contracts/types/theme";
 import {
   findDuplicateTheme,
   useCreateTheme,
@@ -60,7 +59,6 @@ import {
   FolderOpen,
   RefreshCw,
   RotateCcw,
-  ExternalLink,
   ScrollText,
   UserCheck,
   WandSparkles,
@@ -73,7 +71,6 @@ import { HelpTooltip } from "../../../shared/components/ui/HelpTooltip";
 import { TrackerPanelIcon } from "../../../shared/components/ui/TrackerPanelIcon";
 import { ConversationSoundSetting, ToggleSetting } from "./settings/SettingControls";
 import { DraftNumberInput } from "../../../shared/components/ui/DraftNumberInput";
-import { ExportFormatDialog, type ExportFormatChoice } from "../../../shared/components/ui/ExportFormatDialog";
 import { inspectCharacterFilesForEmbeddedLorebooks } from "../../../shared/lib/character-import";
 
 type CustomFontFace = {
@@ -871,7 +868,7 @@ function GeneralSettings() {
             )}
           >
             {assetUploading ? <Loader2 size="0.875rem" className="animate-spin" /> : <Upload size="0.875rem" />}
-            Upload to Server
+            Upload to App Data
           </button>
           {assetFiles.length > 0 && (
             <span className="truncate text-[0.625rem] text-[var(--muted-foreground)]">
@@ -2683,7 +2680,7 @@ function ImportSettings() {
         error?: string;
       };
       if (isZip) {
-        data = await importApi.marinaraPackage(file);
+        data = await importApi.marinaraFile(file);
       } else {
         let envelope: unknown;
         try {
@@ -2758,7 +2755,7 @@ function ImportSettings() {
             }
           : current,
       );
-      const data = await backupApi.importProfile<{
+      const data = await profileApi.importProfile<{
         success?: boolean;
         error?: string;
         message?: string;
@@ -3007,7 +3004,7 @@ function ImportButton({
             ? await importApi.stCharacterFile(payload)
             : endpoint === "/import/st-chat"
               ? await importApi.stChat(file)
-              : await importApi.marinaraPackage(file);
+              : await importApi.marinaraFile(file);
       }
       if (data.success) {
         if (onImported) {
@@ -3060,7 +3057,6 @@ function AdvancedSettings() {
   const [selectedScopes, setSelectedScopes] = useState<ExpungeScope[]>(["chats"]);
   const [confirmAction, setConfirmAction] = useState<"selected" | "all" | null>(null);
   const [exportingProfile, setExportingProfile] = useState(false);
-  const [exportProfileDialogOpen, setExportProfileDialogOpen] = useState(false);
   const [refreshingSpa, setRefreshingSpa] = useState(false);
   const [adminSecret, setAdminSecret] = useState(() => localStorage.getItem(ADMIN_SECRET_STORAGE_KEY) ?? "");
   const [quickRepliesDrawerOpen, setQuickRepliesDrawerOpen] = useState(true);
@@ -3070,18 +3066,17 @@ function AdvancedSettings() {
     if (enabled) setQuickRepliesDrawerOpen(true);
   };
 
-  const handleExportProfile = async (format: ExportFormatChoice) => {
+  const handleExportProfile = async () => {
     setExportingProfile(true);
-    setExportProfileDialogOpen(false);
     try {
-      const { blob, filename } = await backupApi.exportProfile(format);
+      const { blob, filename } = await profileApi.exportProfile();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(format === "compatible" ? "Compatible export created!" : "Profile exported!");
+      toast.success("Profile exported!");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to export profile");
     } finally {
@@ -3097,106 +3092,13 @@ function AdvancedSettings() {
     setRefreshingSpa(true);
 
     try {
-      toast.info("Clearing caches and refreshing app…");
-      await forceRefreshSpa();
+      toast.info("Refreshing app...");
+      window.location.reload();
     } catch (err) {
       setRefreshingSpa(false);
       toast.error(err instanceof Error ? err.message : "Failed to refresh the app");
     }
   };
-
-  const qc = useQueryClient();
-  const [creatingBackup, setCreatingBackup] = useState(false);
-
-  /**
-   * Download a full backup to a user-chosen location.
-   *
-   * Uses the File System Access API (`showSaveFilePicker`) when available so
-   * the browser opens a native "Save As" dialog — this is important on Android
-   * and iOS, where the local `data/backups/` folder isn't reachable
-   * without root. Falls back to an anchor-triggered download (which routes
-   * through the browser's default Downloads handling).
-   */
-  const handleCreateBackup = async () => {
-    setCreatingBackup(true);
-    try {
-      const { blob, filename: suggestedName } = await backupApi.createBackupArchive();
-
-      // Preferred path: native "Save As" dialog (Chromium desktop, some Android)
-      const w = window as typeof window & {
-        showSaveFilePicker?: (options: {
-          suggestedName?: string;
-          types?: Array<{ description?: string; accept: Record<string, string[]> }>;
-        }) => Promise<{
-          createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>;
-        }>;
-      };
-      if (typeof w.showSaveFilePicker === "function") {
-        try {
-          const handle = await w.showSaveFilePicker({
-            suggestedName,
-            types: [
-              {
-                description: "Marinara backup archive",
-                accept: { "application/zip": [".zip"] },
-              },
-            ],
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          toast.success("Backup saved!");
-          qc.invalidateQueries({ queryKey: ["backups"] });
-          return;
-        } catch (err) {
-          // User cancelled the native picker — treat as a silent no-op
-          if (err instanceof DOMException && err.name === "AbortError") return;
-          // Any other failure falls through to the anchor fallback
-        }
-      }
-
-      // Fallback: anchor download. On Android Chrome this routes through the
-      // system Downloads handler (which typically prompts the user or drops
-      // the file in the Downloads folder, both of which are user-accessible).
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = suggestedName;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Backup downloaded!");
-      qc.invalidateQueries({ queryKey: ["backups"] });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create backup");
-    } finally {
-      setCreatingBackup(false);
-    }
-  };
-
-  const { data: backups } = useQuery<{ name: string; createdAt: string; path: string }[]>({
-    queryKey: ["backups"],
-    queryFn: () => api.get("/backup"),
-  });
-
-  const health = useQuery<{
-    status: string;
-    timestamp: string;
-    version: string;
-    commit: string | null;
-    build: string;
-  }>({
-    queryKey: ["health"],
-    queryFn: () => api.get("/health"),
-    staleTime: 60_000,
-  });
-
-  const deleteBackupMutation = useMutation({
-    mutationFn: (name: string) => api.delete(`/backup/${name}`),
-    onSuccess: () => {
-      toast.success("Backup deleted");
-      qc.invalidateQueries({ queryKey: ["backups"] });
-    },
-  });
 
   const saveAdminSecret = useCallback(() => {
     const trimmed = adminSecret.trim();
@@ -3209,73 +3111,6 @@ function AdvancedSettings() {
     }
   }, [adminSecret]);
 
-  const updateCheck = useQuery<{
-    currentVersion: string;
-    currentCommit: string | null;
-    currentBuild: string;
-    targetRef: string;
-    targetCommit: string | null;
-    latestVersion: string;
-    updateAvailable: boolean;
-    versionUpdate?: boolean;
-    commitsBehind?: number;
-    releaseUrl: string;
-    releaseNotes: string;
-    publishedAt: string;
-    installType: "git" | "standalone";
-    applyAvailable?: boolean;
-    updatesApplyEnabled?: boolean;
-    applyUnavailableReason?: "disabled" | "unsupported-install" | null;
-    manualUpdateCommand?: string | null;
-  }>({
-    queryKey: ["update-check"],
-    queryFn: () => api.get("/updates/check"),
-    enabled: false,
-    retry: false,
-  });
-
-  const applyUpdate = useMutation({
-    mutationFn: () =>
-      api.post<{ status: string; message: string }>("/updates/apply", {
-        confirm: true,
-        currentVersion: updateCheck.data?.currentVersion ?? health.data?.version ?? APP_VERSION,
-        currentCommit: updateCheck.data?.currentCommit ?? health.data?.commit ?? null,
-        currentBuild: updateCheck.data?.currentBuild ?? health.data?.build ?? null,
-        targetRef: updateCheck.data?.targetRef,
-        targetCommit: updateCheck.data?.targetCommit,
-      }),
-    onSuccess: (data) => {
-      if (data.status === "already_up_to_date") {
-        toast.info(data.message);
-      } else {
-        toast.success(data.message);
-      }
-    },
-    onError: (err: unknown) => {
-      const message =
-        err instanceof ApiError &&
-        err.payload &&
-        typeof err.payload === "object" &&
-        "message" in err.payload &&
-        typeof err.payload.message === "string"
-          ? err.payload.message
-          : err instanceof Error
-            ? err.message
-            : "Update failed";
-      toast.error(message);
-    },
-  });
-
-  const currentReleaseLabel = `v${health.data?.version ?? updateCheck.data?.currentVersion ?? APP_VERSION}`;
-  const currentCommit = health.data?.commit ?? updateCheck.data?.currentCommit ?? null;
-  const currentBuildLabel = currentCommit ? `Build: ${currentCommit.slice(0, 7)}` : "Build: unavailable";
-  const commitsBehind = updateCheck.data?.commitsBehind ?? 0;
-  const applyUnavailableReason = updateCheck.data?.applyUnavailableReason ?? null;
-  const manualUpdateCommand = updateCheck.data?.manualUpdateCommand ?? null;
-  const applyUnavailableCopy =
-    applyUnavailableReason === "disabled"
-      ? "This install can check for updates, but applying them from this UI is disabled. Update manually with the command below. Advanced git installs can enable desktop apply with UPDATES_APPLY_ENABLED=true."
-      : "This install can check for updates, but it cannot apply them from the browser. Relaunch the app if you use the launcher, or update manually for your install type.";
   const isClearing = clearAllData.isPending || expungeData.isPending;
   const isAllScopesSelected = selectedScopes.length === EXPUNGE_SCOPE_OPTIONS.length;
 
@@ -3304,16 +3139,6 @@ function AdvancedSettings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <ExportFormatDialog
-        open={exportProfileDialogOpen}
-        title="Export Profile"
-        description="Native creates a Marinara profile JSON for restoring your data in Marinara. Compatible creates a ZIP of folderless JSON files for other platforms."
-        nativeDescription="Keeps Marinara fields, lorebook folders, character/persona metadata, presets, agents, and themes for re-import."
-        compatibleDescription="Exports direct character JSON, simple persona JSON, and folderless lorebooks for other roleplay tools."
-        onClose={() => setExportProfileDialogOpen(false)}
-        onSelect={handleExportProfile}
-      />
-
       <div className="text-xs text-[var(--muted-foreground)]">Advanced settings for power users.</div>
 
       <div className="flex flex-col gap-2 rounded-lg bg-[var(--secondary)]/40 p-2.5 ring-1 ring-[var(--border)]">
@@ -3339,133 +3164,12 @@ function AdvancedSettings() {
         </div>
       </div>
 
-      {/* ── Updates ── */}
+      {/* ── Runtime ── */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-1.5">
           <RefreshCw size="0.75rem" className="text-[var(--muted-foreground)]" />
-          <span className="text-xs font-medium">Updates</span>
+          <span className="text-xs font-medium">Runtime</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => updateCheck.refetch()}
-            disabled={updateCheck.isFetching}
-            className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-medium text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
-          >
-            {updateCheck.isFetching ? (
-              <>
-                <Loader2 size="0.8125rem" className="animate-spin" />
-                Checking…
-              </>
-            ) : (
-              <>
-                <RefreshCw size="0.8125rem" />
-                Check for Updates
-              </>
-            )}
-          </button>
-          <div className="flex flex-col text-[0.6875rem] text-[var(--muted-foreground)]">
-            <span>Release: {currentReleaseLabel}</span>
-            <span>{currentBuildLabel}</span>
-          </div>
-        </div>
-
-        {updateCheck.data && !updateCheck.data.updateAvailable && (
-          <div className="flex items-center gap-1.5 rounded-lg bg-[var(--secondary)] px-2.5 py-2 ring-1 ring-[var(--border)]">
-            <Check size="0.8125rem" className="text-green-500 shrink-0" />
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs">You're on the latest release ({currentReleaseLabel})</span>
-              <span className="text-[0.6875rem] text-[var(--muted-foreground)]">{currentBuildLabel}</span>
-            </div>
-          </div>
-        )}
-
-        {updateCheck.data?.updateAvailable && (
-          <div className="flex flex-col gap-2 rounded-lg bg-[var(--secondary)] p-2.5 ring-1 ring-[var(--border)]">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium">
-                {updateCheck.data.versionUpdate
-                  ? `v${updateCheck.data.latestVersion} available`
-                  : `${commitsBehind} commit${commitsBehind !== 1 ? "s" : ""} behind ${updateCheck.data.targetRef ?? "origin/main"}`}
-              </span>
-              {updateCheck.data.versionUpdate && (
-                <a
-                  href={updateCheck.data.releaseUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[0.625rem] text-[var(--primary)] hover:underline"
-                >
-                  Release notes <ExternalLink size="0.625rem" />
-                </a>
-              )}
-            </div>
-            {updateCheck.data.versionUpdate && updateCheck.data.releaseNotes && (
-              <p className="text-[0.625rem] text-[var(--muted-foreground)] line-clamp-4 whitespace-pre-wrap">
-                {updateCheck.data.releaseNotes}
-              </p>
-            )}
-            {commitsBehind > 0 && (
-              <p className="text-[0.625rem] text-[var(--muted-foreground)]">
-                Commit counts compare this build with {updateCheck.data.targetRef ?? "origin/main"} and may include
-                unreleased development commits, not just tagged releases.
-              </p>
-            )}
-            {updateCheck.data.applyAvailable ? (
-              <button
-                onClick={() => applyUpdate.mutate()}
-                disabled={applyUpdate.isPending}
-                className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-medium text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
-              >
-                {applyUpdate.isPending ? (
-                  <>
-                    <Loader2 size="0.8125rem" className="animate-spin" />
-                    Updating…
-                  </>
-                ) : (
-                  <>
-                    <Download size="0.8125rem" />
-                    Apply Update
-                  </>
-                )}
-              </button>
-            ) : (
-              <div className="flex flex-col gap-1.5 rounded-lg bg-[var(--background)]/60 p-2 ring-1 ring-[var(--border)]">
-                <div className="flex items-start gap-1.5">
-                  <AlertTriangle size="0.8125rem" className="mt-0.5 shrink-0 text-amber-500" />
-                  <span className="text-[0.6875rem] text-[var(--muted-foreground)]">{applyUnavailableCopy}</span>
-                </div>
-                {updateCheck.data.versionUpdate && (
-                  <a
-                    href={updateCheck.data.releaseUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-medium text-white transition-all hover:opacity-90 active:scale-95"
-                  >
-                    <Download size="0.8125rem" />
-                    Download v{updateCheck.data.latestVersion}
-                  </a>
-                )}
-                {updateCheck.data.versionUpdate && (
-                  <span className="text-[0.625rem] text-[var(--muted-foreground)]">
-                    Android APK assets are WebView shells, not standalone apps. Start Marinara in Termux first.
-                  </span>
-                )}
-                {manualUpdateCommand && (
-                  <span className="text-[0.625rem] text-[var(--muted-foreground)]">
-                    Manual update:{" "}
-                    <code className="break-all rounded bg-[var(--background)] px-1 py-0.5">{manualUpdateCommand}</code>
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {updateCheck.isError && (
-          <div className="flex items-center gap-1.5 rounded-lg bg-[var(--destructive)]/10 px-2.5 py-2 text-xs text-[var(--destructive)]">
-            <AlertTriangle size="0.8125rem" className="shrink-0" />
-            Could not check for updates. Try again later.
-          </div>
-        )}
 
         <div className="flex items-center gap-2">
           <button
@@ -3682,35 +3386,18 @@ function AdvancedSettings() {
         help="Logs the prompt and response payloads sent to the local Tauri console for debugging."
       />
 
-      {/* ── Backup ── */}
+      {/* ── Profile Export ── */}
       <div className="retro-divider" />
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-1.5">
           <Download size="0.75rem" className="text-[var(--muted-foreground)]" />
-          <span className="text-xs font-medium">Backup & Export</span>
-          <HelpTooltip text="Download a full backup as a .zip archive (storage snapshots + avatars, sprites, backgrounds, gallery, fonts, knowledge sources). The zip also includes marinara-profile.json for one-click restore through Import Profile (JSON). The raw folders are for manual recovery." />
+          <span className="text-xs font-medium">Profile Export</span>
+          <HelpTooltip text="Exports the current Marinara profile as native JSON for re-import through Import Profile." />
         </div>
         <button
-          onClick={handleCreateBackup}
-          disabled={creatingBackup}
-          className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-medium text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
-        >
-          {creatingBackup ? (
-            <>
-              <Loader2 size="0.8125rem" className="animate-spin" />
-              Creating backup…
-            </>
-          ) : (
-            <>
-              <Download size="0.8125rem" />
-              Download Backup
-            </>
-          )}
-        </button>
-        <button
-          onClick={() => setExportProfileDialogOpen(true)}
+          onClick={() => void handleExportProfile()}
           disabled={exportingProfile}
-          className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs font-medium ring-1 ring-[var(--border)] transition-all hover:bg-[var(--secondary)]/80 active:scale-95 disabled:opacity-50"
+          className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-medium text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
         >
           {exportingProfile ? (
             <>
@@ -3724,30 +3411,6 @@ function AdvancedSettings() {
             </>
           )}
         </button>
-        {backups && backups.length > 0 && (
-          <div className="flex flex-col gap-1 mt-1">
-            <span className="text-[0.625rem] font-medium text-[var(--muted-foreground)]">Existing backups</span>
-            {backups.map((b) => (
-              <div
-                key={b.name}
-                className="flex items-center justify-between rounded-lg bg-[var(--secondary)] px-2.5 py-1.5 ring-1 ring-[var(--border)]"
-              >
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[0.6875rem] font-medium truncate">{b.name}</span>
-                  <span className="text-[0.5625rem] text-[var(--muted-foreground)]">
-                    {new Date(b.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                <button
-                  onClick={() => deleteBackupMutation.mutate(b.name)}
-                  className="ml-2 rounded p-1 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]"
-                >
-                  <Trash2 size="0.75rem" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* ── Danger Zone ── */}

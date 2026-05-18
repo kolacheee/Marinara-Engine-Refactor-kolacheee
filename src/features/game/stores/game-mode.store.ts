@@ -3,15 +3,7 @@
 // ──────────────────────────────────────────────
 import { create } from "zustand";
 import { gameApi } from "../api/game-api";
-import type {
-  GameActiveState,
-  GameMap,
-  GameNpc,
-  DiceRollResult,
-  HudWidget,
-  GameBlueprint,
-  WidgetUpdate,
-} from "@marinara-engine/shared";
+import type { GameActiveState, GameMap, GameNpc, DiceRollResult, HudWidget, GameBlueprint, WidgetUpdate } from "../../../engine/contracts/types/game";
 
 interface GameModeStore {
   /** The active game ID (groupId that links all sessions). */

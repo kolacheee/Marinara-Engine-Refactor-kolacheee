@@ -11,11 +11,7 @@ import {
   Sparkles,
   Square,
 } from "lucide-react";
-import type {
-  TrackerCardColorConfig,
-  TrackerCardColorMode,
-  TrackerCardPortraitStageBackground,
-} from "@marinara-engine/shared";
+import type { TrackerCardColorConfig, TrackerCardColorMode, TrackerCardPortraitStageBackground } from "../../../engine/contracts/types/persona";
 import { cn } from "../../lib/utils";
 import {
   cleanTrackerCardColorConfig,

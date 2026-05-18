@@ -58,20 +58,8 @@ import {
 } from "../../../shared/lib/agent-cadence";
 import { HelpTooltip } from "../../../shared/components/ui/HelpTooltip";
 import { spotifyApi } from "../../../shared/api/integration-utility-api";
-import {
-  BUILT_IN_AGENTS,
-  BUILT_IN_TOOLS,
-  DEFAULT_AGENT_CONTEXT_SIZE,
-  DEFAULT_AGENT_TOOLS,
-  DEFAULT_AGENT_MAX_TOKENS,
-  MAX_AGENT_MAX_TOKENS,
-  MIN_AGENT_MAX_TOKENS,
-  getDefaultBuiltInAgentSettings,
-  getDefaultAgentPrompt,
-  type AgentPhase,
-  type AgentResultType,
-  type ToolDefinition,
-} from "@marinara-engine/shared";
+import { getDefaultAgentPrompt } from "../../../engine/contracts/constants/agent-prompts";
+import { BUILT_IN_AGENTS, BUILT_IN_TOOLS, DEFAULT_AGENT_CONTEXT_SIZE, DEFAULT_AGENT_TOOLS, DEFAULT_AGENT_MAX_TOKENS, MAX_AGENT_MAX_TOKENS, MIN_AGENT_MAX_TOKENS, getDefaultBuiltInAgentSettings, type AgentPhase, type AgentResultType, type ToolDefinition } from "../../../engine/contracts/types/agent";
 
 function createCustomAgentType(name: string): string {
   const slug =
@@ -86,7 +74,7 @@ function createCustomAgentType(name: string): string {
   return `custom-${slug}-${suffix}`;
 }
 
-const SPOTIFY_NATIVE_REDIRECT_URI = "http://127.0.0.1:7860/api/spotify/callback";
+const SPOTIFY_NATIVE_REDIRECT_URI = "http://127.0.0.1:8754/spotify/callback";
 
 // Mirrors the native Spotify redirect rule used by the Rust callback listener.
 function getDisplayedSpotifyRedirectUri(): string {
@@ -1444,7 +1432,7 @@ export function AgentEditor() {
                             setSpotifyPasteError(null);
                           }}
                           rows={3}
-                          placeholder="http://127.0.0.1:7860/api/spotify/callback?code=...&state=..."
+                          placeholder="http://127.0.0.1:8754/spotify/callback?code=...&state=..."
                           className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[0.6875rem] text-white placeholder-white/20 outline-none focus:border-green-500/50 focus:ring-1 focus:ring-green-500/20 font-mono"
                         />
                         {spotifyPasteError && <p className="text-red-400/80 text-[0.625rem]">{spotifyPasteError}</p>}

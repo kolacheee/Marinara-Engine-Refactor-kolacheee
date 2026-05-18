@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
-import type { SceneAnalysis } from "@marinara-engine/shared";
-import { analyzeScene } from "../../../engine/modes/roleplay/scene";
+import type { SceneAnalysis } from "../../../engine/contracts/types/scene";
+import { analyzeScene } from "../../../engine/modes/roleplay/scene/scene-service";
 import { llmApi } from "../../../shared/api/llm-api";
 import { storageApi } from "../../../shared/api/storage-api";
 

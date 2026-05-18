@@ -19,7 +19,7 @@ import {
   useUpdateChatMetadata,
 } from "../../chats/hooks/use-chats";
 import { useChatStore } from "../../../shared/stores/chat.store";
-import type { Chat } from "@marinara-engine/shared";
+import type { Chat } from "../../../engine/contracts/types/chat";
 
 interface ChatFilesDrawerProps {
   chat: Chat;

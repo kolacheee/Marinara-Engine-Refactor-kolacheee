@@ -1,4 +1,4 @@
-import type { StorageGateway, StorageListOptions } from "../capabilities";
+import type { StorageGateway, StorageListOptions } from "../capabilities/storage";
 
 export interface EntityRepository<T extends { id: string }> {
   list(options?: StorageListOptions): Promise<T[]>;

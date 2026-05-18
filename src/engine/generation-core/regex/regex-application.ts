@@ -1,7 +1,4 @@
-// ──────────────────────────────────────────────
-// Regex Scripts — Prompt Application
-// ──────────────────────────────────────────────
-import { applyRegexReplacement } from "@marinara-engine/shared";
+import { applyRegexReplacement } from "../../shared/regex/regex-replacement";
 
 type RegexPlacement = "ai_output" | "user_input";
 

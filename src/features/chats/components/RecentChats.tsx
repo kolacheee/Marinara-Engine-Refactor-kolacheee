@@ -8,7 +8,7 @@ import { useChats } from "../../chats/hooks/use-chats";
 import { useCharacters } from "../../characters/hooks/use-characters";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { cn, getAvatarCropStyle, type AvatarCropValue } from "../../../shared/lib/utils";
-import type { Chat } from "@marinara-engine/shared";
+import type { Chat } from "../../../engine/contracts/types/chat";
 
 const MODE_BADGE: Record<string, { icon: React.ReactNode; bg: string; label: string }> = {
   conversation: {

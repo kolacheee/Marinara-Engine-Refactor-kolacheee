@@ -6,7 +6,9 @@ import { Modal } from "../../../shared/components/ui/Modal";
 import { useCreateConnection } from "../hooks/use-connections";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { Loader2, Link } from "lucide-react";
-import { MODEL_LISTS, PROVIDERS, isTauriRuntimeProvider, type APIProvider } from "@marinara-engine/shared";
+import { MODEL_LISTS } from "../../../engine/contracts/constants/model-lists";
+import { PROVIDERS, isTauriRuntimeProvider } from "../../../engine/contracts/constants/providers";
+import type { APIProvider } from "../../../engine/contracts/types/connection";
 import { cn } from "../../../shared/lib/utils";
 import { toast } from "sonner";
 

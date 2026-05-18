@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 import type { ReactNode } from "react";
 import { cn } from "../../../shared/lib/utils";
-import type { GridCell, GameMap } from "@marinara-engine/shared";
+import type { GridCell, GameMap } from "../../../engine/contracts/types/game";
 import { AnimatedText } from "./AnimatedText";
 
 const TERRAIN_COLORS: Record<string, string> = {

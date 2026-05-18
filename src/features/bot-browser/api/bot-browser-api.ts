@@ -1,5 +1,5 @@
 import { api } from "../../../shared/api/api-client";
-import { fetchUrlBlob } from "../../../shared/lib/url-blob";
+import { loadUrlBlob } from "../../../shared/lib/url-blob";
 
 const TAURI_ASSET_PREFIX = "tauri-api:";
 
@@ -79,7 +79,7 @@ export async function fetchBotBrowserAssetBlob(
   const localPath = stripAssetPrefix(src);
   if (localPath) return botBrowserBlob(localPath, fallbackMimeType, init);
 
-  return fetchUrlBlob(src, { init, errorMessage: "Failed to load asset" });
+  return loadUrlBlob(src, { init, errorMessage: "Failed to load asset" });
 }
 
 export async function resolveBotBrowserAssetUrl(src: string, init?: RequestInit): Promise<string> {

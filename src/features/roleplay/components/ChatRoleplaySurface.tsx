@@ -10,7 +10,8 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { type SceneForkMode, type SpritePlacement, type SpriteSide } from "@marinara-engine/shared";
+import type { SpritePlacement, SpriteSide } from "../../../engine/contracts/types/chat";
+import type { SceneForkMode } from "../../../engine/contracts/types/scene";
 import {
   FolderOpen,
   Image,

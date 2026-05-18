@@ -1,5 +1,7 @@
-import type { AgentResult } from "@marinara-engine/shared";
-import type { EventGateway, LlmGateway, LlmMessage, StorageGateway } from "../capabilities";
+import type { AgentResult } from "../contracts/types/agent";
+import type { EventGateway } from "../capabilities/events";
+import type { LlmGateway, LlmMessage } from "../capabilities/llm";
+import type { StorageGateway } from "../capabilities/storage";
 import { createGenerationAgentRuntime } from "./agent-runner";
 import { persistConnectedCommandTags } from "./connected-commands";
 import { llmParameters, loadChatMessages, requireRecord, resolveGenerationConnection } from "./context";

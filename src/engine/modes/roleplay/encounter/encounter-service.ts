@@ -1,31 +1,11 @@
-import type { LlmGateway, LlmMessage, StorageGateway } from "../../../capabilities";
+import type { LlmGateway, LlmMessage } from "../../../capabilities/llm";
+import type { StorageGateway } from "../../../capabilities/storage";
 import { parseJsonArray, parseJsonObject } from "../../../core/json";
 import { parseGameJsonish } from "../../../shared/parsing-jsonish";
-import type {
-  Chat,
-  CombatActionResult,
-  CombatAttack,
-  CombatEnemy,
-  CombatEnemyAction,
-  CombatInitState,
-  CombatItemEffect,
-  CombatPartyAction,
-  CombatPartyMember,
-  CombatPlayerActions,
-  CombatStatus,
-  CombatStyleNotes,
-  EncounterActionRequest,
-  EncounterActionResponse,
-  EncounterInitRequest,
-  EncounterInitResponse,
-  EncounterLogEntry,
-  EncounterSummaryRequest,
-  EncounterSummaryResponse,
-  Message,
-  NarrativeStyle,
-  PersonaStatsConfig,
-  RPGStatsConfig,
-} from "@marinara-engine/shared";
+import type { RPGStatsConfig } from "../../../contracts/types/character";
+import type { Chat, Message } from "../../../contracts/types/chat";
+import type { CombatActionResult, CombatAttack, CombatEnemy, CombatEnemyAction, CombatInitState, CombatItemEffect, CombatPartyAction, CombatPartyMember, CombatPlayerActions, CombatStatus, CombatStyleNotes, EncounterActionRequest, EncounterActionResponse, EncounterInitRequest, EncounterInitResponse, EncounterLogEntry, EncounterSummaryRequest, EncounterSummaryResponse, NarrativeStyle } from "../../../contracts/types/combat-encounter";
+import type { PersonaStatsConfig } from "../../../contracts/types/persona";
 
 type JsonRecord = Record<string, unknown>;
 

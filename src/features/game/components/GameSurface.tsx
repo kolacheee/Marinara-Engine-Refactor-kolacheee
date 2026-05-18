@@ -80,26 +80,12 @@ import { useSceneAnalysis } from "../../visuals/hooks/use-scene-analysis";
 import { parsePartyDialogue } from "../lib/party-dialogue-parser";
 import { dispatchSpotifySceneTrackChange } from "../../../shared/lib/spotify-playback-events";
 import { ActiveWorldInfoButton, ActiveWorldInfoModal } from "../../visuals/components/ActiveWorldInfoButton";
-import type {
-  PartyDialogueLine,
-  CombatSummary,
-  GameMap,
-  GameActiveState,
-  CombatInitState,
-  CombatPartyMember,
-  CombatEnemy,
-  CombatDialogueCue,
-  CombatItemEffect,
-  CombatMechanic,
-  DiceRollResult,
-  EncounterSettings,
-  HudWidget,
-  SceneSpotifyTrackCandidate,
-  SceneSpotifyTrackSelection,
-} from "@marinara-engine/shared";
-import type { SceneSegmentEffect } from "@marinara-engine/shared";
-import { scoreMusic, scoreAmbient } from "@marinara-engine/shared";
-import { GameNarration, formatNarration } from "./GameNarration";
+import type { CombatInitState, CombatPartyMember, CombatEnemy, CombatDialogueCue, CombatItemEffect, CombatMechanic, EncounterSettings } from "../../../engine/contracts/types/combat-encounter";
+import type { PartyDialogueLine, CombatSummary, GameMap, GameActiveState, DiceRollResult, HudWidget, SkillCheckResult } from "../../../engine/contracts/types/game";
+import type { SceneAnalysis, SceneIllustrationRequest, SceneSegmentEffect, SceneSpotifyTrackCandidate, SceneSpotifyTrackSelection } from "../../../engine/contracts/types/scene";
+import { scoreMusic, scoreAmbient } from "../../../engine/shared/scoring/music-score";
+import { GameNarration } from "./GameNarration";
+import { formatNarration } from "../lib/game-narration-format";
 import { GameInput } from "./GameInput";
 import { GameVolumeMixer } from "./GameVolumeMixer";
 import { GameMapPanel, MobileMapButton } from "./GameMap";
@@ -118,10 +104,10 @@ import { GameQteOverlay } from "./GameQteOverlay";
 import { GameJournal } from "./GameJournal";
 import { GameJsonRepairModal } from "./GameJsonRepairModal";
 import {
-  GameImagePromptReviewModal,
-  type GameImagePromptOverride,
-  type GameImagePromptReviewItem,
-} from "./GameImagePromptReviewModal";
+  ImagePromptReviewModal as GameImagePromptReviewModal,
+  type ImagePromptOverride as GameImagePromptOverride,
+  type ImagePromptReviewItem as GameImagePromptReviewItem,
+} from "../../../shared/components/ui/ImagePromptReviewModal";
 import { GameTutorial } from "./GameTutorial";
 import { DirectionEngine } from "./DirectionEngine";
 import { GameWidgetPanel, GameWidgetSessionPrepModal, MobileWidgetPanel } from "./GameWidgetPanel";
@@ -134,7 +120,7 @@ import {
 } from "./game-asset-generation-payload";
 import { ChatGalleryDrawer } from "../../chats/components/ChatGalleryDrawer";
 import type { ReadableTag } from "../lib/game-tag-parser";
-import type { DirectionCommand, GameNpc } from "@marinara-engine/shared";
+import type { DirectionCommand, GameNpc } from "../../../engine/contracts/types/game";
 
 type JournalReadable = ReadableTag & {
   sourceMessageId?: string | null;
@@ -146,7 +132,7 @@ type GameAssetGenerationPayload = {
   backgroundTag?: string;
   npcsNeedingAvatars?: Array<{ name: string; description: string }>;
   forceNpcAvatarNames?: string[];
-  illustration?: import("@marinara-engine/shared").SceneIllustrationRequest;
+  illustration?: SceneIllustrationRequest;
   debugMode?: boolean;
   imageSizes?: {
     background?: { width: number; height: number };
@@ -436,10 +422,7 @@ function parseStoredNarrationProgress(raw: string | null): StoredNarrationProgre
       };
     }
   } catch {
-    const legacyIndex = Number(raw);
-    if (Number.isFinite(legacyIndex) && legacyIndex >= 0) {
-      return { index: legacyIndex, messageId: null };
-    }
+    return null;
   }
 
   return null;
@@ -929,7 +912,8 @@ const GameCombatUI = lazy(async () => {
 });
 
 import { Modal } from "../../../shared/components/ui/Modal";
-import type { Chat, SessionSummary, Combatant, Message, GameCombatStateSnapshot } from "@marinara-engine/shared";
+import type { Chat, Message } from "../../../engine/contracts/types/chat";
+import type { SessionSummary, Combatant, GameCombatStateSnapshot } from "../../../engine/contracts/types/game";
 import type { CharacterMap, PersonaInfo } from "../../chats/components/chat-area.types";
 
 /** Typewriter component for the intro screen — reveals text character-by-character. */
@@ -1744,7 +1728,7 @@ export function GameSurface({
     }
   }, [activeChatId, metaWeather, metaTime]);
 
-  // ── Client-side backup: ensure location is added to journal when game state reports one ──
+  // Keep the journal in step when game state reports a new location.
   const lastJournaledLocationRef = useRef<string | null>(null);
   useEffect(() => {
     const loc = gameSnapshot?.location;
@@ -1837,7 +1821,7 @@ export function GameSurface({
     statuses: CombatStatusTag[];
     messageId: string;
   } | null>(null);
-  const [pendingSkillCheck, setPendingSkillCheck] = useState<import("@marinara-engine/shared").SkillCheckResult | null>(
+  const [pendingSkillCheck, setPendingSkillCheck] = useState<SkillCheckResult | null>(
     null,
   );
   const [pendingReaction, setPendingReaction] = useState<{
@@ -2889,7 +2873,7 @@ export function GameSurface({
   // isn't displayed until backgrounds/music/etc. are ready.
   const sceneReadyMsgIdRef = useRef<string | undefined>(undefined);
   const applySceneResultRef = useRef<
-    ((result: import("@marinara-engine/shared").SceneAnalysis) => void | Promise<void>) | null
+    ((result: SceneAnalysis) => void | Promise<void>) | null
   >(null);
   const [sceneReadyTick, setSceneReadyTick] = useState(0);
   void sceneReadyTick; // used only to trigger re-renders
@@ -3414,9 +3398,8 @@ export function GameSurface({
       playDirections(tags.directions);
     }
 
-    // Combat starts are declared by the GM with [state: combat]. Legacy
-    // [combat: ...] payloads still seed directly for old saves/presets; new
-    // turns call the combat JSON generator after the narrated turn is read.
+    // Combat starts are declared either by a structured encounter tag or by
+    // [state: combat], which then runs the combat JSON generator.
     if (!suppressInteractiveCommands) {
       if (tags.combatEncounter) {
         setQueuedEncounter({ encounter: tags.combatEncounter, messageId: msg.id });
@@ -3875,7 +3858,7 @@ export function GameSurface({
     [clearFailedNpcAvatars, fetchManifest, installGeneratedIllustration],
   );
 
-  async function applySceneResult(result: import("@marinara-engine/shared").SceneAnalysis, msg: { id: string }) {
+  async function applySceneResult(result: SceneAnalysis, msg: { id: string }) {
     console.log("[scene-analysis] Result from model:", JSON.stringify(result, null, 2));
     setSceneAnalysisFailed(false);
     // NOTE: Game state transitions are owned exclusively by the GM model via [state: ...] tags.
@@ -6407,9 +6390,14 @@ export function GameSurface({
   const handleRegenerateSessionLorebook = useCallback(
     async (sessionNumber: number) => {
       if (!activeChatId) return;
-      await regenerateSessionLorebook.mutateAsync({ chatId: activeChatId, sessionNumber });
+      try {
+        await regenerateSessionLorebook.mutateAsync({ chatId: activeChatId, sessionNumber });
+      } catch (error) {
+        if (handleJsonRepairError(error)) return;
+        throw error;
+      }
     },
-    [activeChatId, regenerateSessionLorebook],
+    [activeChatId, handleJsonRepairError, regenerateSessionLorebook],
   );
 
   const handleUpdateCampaignProgression = useCallback(
@@ -7223,6 +7211,7 @@ export function GameSurface({
                   setupConfig: config,
                   chatId: activeChatId,
                   connectionId: conns.gmConnectionId,
+                  partyCharacterIds: config.partyCharacterIds,
                 },
                 {
                   onSuccess: (res) => {
@@ -7231,6 +7220,7 @@ export function GameSurface({
                         chatId: res.sessionChat.id,
                         connectionId: conns.gmConnectionId,
                         preferences,
+                        setupConfig: config,
                       },
                       { onError: handleJsonRepairError },
                     );
@@ -7239,7 +7229,7 @@ export function GameSurface({
               );
             } else {
               gameSetup.mutate(
-                { chatId: activeChatId, connectionId: conns.gmConnectionId, preferences },
+                { chatId: activeChatId, connectionId: conns.gmConnectionId, preferences, setupConfig: config },
                 { onError: handleJsonRepairError },
               );
             }

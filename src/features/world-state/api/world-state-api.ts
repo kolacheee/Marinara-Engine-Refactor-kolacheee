@@ -1,4 +1,4 @@
-import type { GameState } from "@marinara-engine/shared";
+import type { GameState } from "../../../engine/contracts/types/game-state";
 import { api } from "../../../shared/api/api-client";
 
 export type WorldState = GameState;

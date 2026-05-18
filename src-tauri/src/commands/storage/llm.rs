@@ -102,6 +102,19 @@ pub(crate) async fn llm_stream_events(state: &AppState, body: Value) -> AppResul
     Ok(events)
 }
 
+pub(crate) async fn llm_stream_channel(
+    state: &AppState,
+    body: Value,
+    on_event: tauri::ipc::Channel<Value>,
+) -> AppResult<()> {
+    marinara_llm::stream_events(llm_request_from_body(state, body)?, |event| {
+        on_event
+            .send(event)
+            .map_err(|error| AppError::new("stream_channel_error", error.to_string()))
+    })
+    .await
+}
+
 pub(crate) async fn llm_models(state: &AppState, connection_id: Option<&str>) -> AppResult<Value> {
     let connection = connection_id
         .and_then(|id| state.storage.get("connections", id).ok().flatten())
@@ -171,35 +184,6 @@ pub(crate) async fn connection_models(state: &AppState, id: &str) -> AppResult<V
     Ok(json!({ "models": models }))
 }
 
-pub(crate) fn diagnose_claude_subscription(state: &AppState, id: &str) -> AppResult<Value> {
-    let connection = get_required(state, "connections", id)?;
-    let provider = connection
-        .get("provider")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    let requested_model = connection.get("model").cloned().unwrap_or(Value::Null);
-    let is_claude = provider == "anthropic"
-        || requested_model
-            .as_str()
-            .map(|model| model.to_ascii_lowercase().contains("claude"))
-            .unwrap_or(false);
-    Ok(json!({
-        "success": is_claude,
-        "requestedModel": requested_model,
-        "modelsBilled": if is_claude { vec![requested_model.clone()] } else { Vec::<Value>::new() },
-        "modelUsageDetail": if is_claude {
-            vec![json!({ "model": requested_model, "source": "configured-connection" })]
-        } else {
-            Vec::<Value>::new()
-        },
-        "message": if is_claude {
-            "Claude-compatible connection is configured locally. Provider billing details are available in the Anthropic account console."
-        } else {
-            "This connection is not configured as an Anthropic/Claude provider."
-        }
-    }))
-}
-
 fn provider_model_catalog(provider: &str) -> Vec<Value> {
     let ids: &[&str] = match provider {
         "anthropic" => &[
@@ -242,9 +226,6 @@ async fn fetch_provider_models(connection: &Value) -> AppResult<Vec<Value>> {
         .get("provider")
         .and_then(Value::as_str)
         .unwrap_or("openai");
-    if matches!(provider, "claude_subscription" | "openai_chatgpt") {
-        return Ok(provider_model_catalog(provider));
-    }
     if provider == "image_generation" {
         return fetch_image_models(connection).await;
     }

@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import type { Message, SpriteSide } from "@marinara-engine/shared";
+import type { Message, SpriteSide } from "../../../engine/contracts/types/chat";
 import { ConversationView } from "./ConversationView";
 import { ChatCommonOverlays } from "./ChatCommonOverlays";
 import type { CharacterMap, MessageSelectionToggle, PeekPromptData, PersonaInfo } from "./chat-area.types";
@@ -51,6 +51,7 @@ type ConversationSurfaceProps = {
   onEdit: (messageId: string, content: string) => void;
   onSetActiveSwipe: (messageId: string, index: number) => void;
   onPeekPrompt: () => void;
+  onToggleHiddenFromAI: (messageId: string, current: boolean) => void;
   onToggleSelectMessage: (toggle: MessageSelectionToggle) => void;
   onSwitchChat?: () => void;
   onConcludeScene?: () => void;
@@ -113,6 +114,7 @@ export function ChatConversationSurface({
   onEdit,
   onSetActiveSwipe,
   onPeekPrompt,
+  onToggleHiddenFromAI,
   onToggleSelectMessage,
   onSwitchChat,
   onConcludeScene,
@@ -164,6 +166,7 @@ export function ChatConversationSurface({
           onEdit={onEdit}
           onSetActiveSwipe={onSetActiveSwipe}
           onPeekPrompt={onPeekPrompt}
+          onToggleHiddenFromAI={onToggleHiddenFromAI}
           lastAssistantMessageId={lastAssistantMessageId}
           onOpenSettings={onOpenSettings}
           onOpenFiles={onOpenFiles}

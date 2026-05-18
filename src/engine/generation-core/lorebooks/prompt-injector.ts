@@ -1,10 +1,4 @@
-// ──────────────────────────────────────────────
-// Lorebook: Prompt Injector
-// Takes activated lorebook entries and injects
-// them into the prompt at the correct positions
-// (WORLD_INFO_BEFORE / WORLD_INFO_AFTER / depth).
-// ──────────────────────────────────────────────
-import type { LorebookRole } from "@marinara-engine/shared";
+import type { LorebookRole } from "../../contracts/types/lorebook";
 import type { ActivatedEntry } from "./keyword-scanner.js";
 
 /** A prompt message ready for injection. */

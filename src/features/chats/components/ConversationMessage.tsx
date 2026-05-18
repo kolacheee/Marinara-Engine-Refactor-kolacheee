@@ -9,6 +9,7 @@ import {
   Copy,
   RefreshCw,
   Eye,
+  EyeOff,
   ScrollText,
   Brain,
   X,
@@ -16,7 +17,7 @@ import {
   Languages,
 } from "lucide-react";
 import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
-import type { Message, MessageExtra } from "@marinara-engine/shared";
+import type { Message, MessageExtra } from "../../../engine/contracts/types/chat";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { cn, copyToClipboard, getAvatarCropStyle, parseAvatarCropJson } from "../../../shared/lib/utils";
@@ -248,6 +249,7 @@ interface ConversationMessageProps {
   onEdit?: (messageId: string, content: string) => void;
   onSetActiveSwipe?: (messageId: string, index: number) => void;
   onPeekPrompt?: () => void;
+  onToggleHiddenFromAI?: (messageId: string, current: boolean) => void;
   isLastAssistantMessage?: boolean;
   characterMap?: CharacterMap;
   personaInfo?: PersonaInfo;
@@ -275,6 +277,7 @@ export const ConversationMessage = memo(function ConversationMessage({
   onEdit,
   onSetActiveSwipe,
   onPeekPrompt,
+  onToggleHiddenFromAI,
   isLastAssistantMessage,
   characterMap,
   personaInfo,
@@ -319,6 +322,7 @@ export const ConversationMessage = memo(function ConversationMessage({
     return typeof message.extra === "string" ? JSON.parse(message.extra) : message.extra;
   }, [message.extra]);
   const generationReplay = hasGenerationReplayDetails(extra.generationReplay) ? extra.generationReplay : null;
+  const isHiddenFromAI = extra.hiddenFromAI === true;
   // canRegenerate lets assistant messages retry; isUser messages need generationReplay
   // metadata from hasGenerationReplayDetails, such as /impersonate.
   const canRegenerate = !isUser || generationReplay !== null;
@@ -826,6 +830,14 @@ export const ConversationMessage = memo(function ConversationMessage({
           {isLastAssistantMessage && (
             <MsgAction icon={<Eye size="0.75rem" />} onClick={() => onPeekPrompt?.()} title="Peek prompt" />
           )}
+          {onToggleHiddenFromAI && (
+            <MsgAction
+              icon={isHiddenFromAI ? <Eye size="0.75rem" /> : <EyeOff size="0.75rem" />}
+              onClick={() => onToggleHiddenFromAI(message.id, isHiddenFromAI)}
+              title={isHiddenFromAI ? "Unhide from AI" : "Hide from AI"}
+              className={isHiddenFromAI ? "text-amber-500" : undefined}
+            />
+          )}
           {generationReplay && (
             <MsgAction
               icon={<ScrollText size="0.75rem" />}
@@ -1126,6 +1138,14 @@ export const ConversationMessage = memo(function ConversationMessage({
           )}
           {isLastAssistantMessage && !isUser && (
             <MsgAction icon={<Eye size="0.75rem" />} onClick={() => onPeekPrompt?.()} title="Peek prompt" />
+          )}
+          {onToggleHiddenFromAI && (
+            <MsgAction
+              icon={isHiddenFromAI ? <Eye size="0.75rem" /> : <EyeOff size="0.75rem" />}
+              onClick={() => onToggleHiddenFromAI(message.id, isHiddenFromAI)}
+              title={isHiddenFromAI ? "Unhide from AI" : "Hide from AI"}
+              className={isHiddenFromAI ? "text-amber-500" : undefined}
+            />
           )}
           {generationReplay && (
             <MsgAction

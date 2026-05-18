@@ -1,10 +1,5 @@
-// ──────────────────────────────────────────────
-// Conversation: Schedule Service
-// ──────────────────────────────────────────────
-// Generates and manages weekly schedules for characters in Conversation mode.
-// Schedules are stored in chat metadata and drive the status system.
-
-import type { LlmGateway, LlmMessage, StorageGateway } from "../../../capabilities";
+import type { LlmGateway, LlmMessage } from "../../../capabilities/llm";
+import type { StorageGateway } from "../../../capabilities/storage";
 import { parseJsonArray, parseJsonObject } from "../../../core/json";
 import type { BaseLLMProvider, ChatMessage } from "../../../generation-core/llm/base-provider.js";
 

@@ -1,10 +1,6 @@
-// ──────────────────────────────────────────────
-// Conversation Auto-Summaries
-// ──────────────────────────────────────────────
-// Shared daily/weekly summary generation for conversation mode.
-
-import type { DaySummaryEntry, WeekSummaryEntry } from "@marinara-engine/shared";
-import type { LlmGateway, LlmMessage, StorageGateway } from "../../../../capabilities";
+import type { DaySummaryEntry, WeekSummaryEntry } from "../../../../contracts/types/chat";
+import type { LlmGateway, LlmMessage } from "../../../../capabilities/llm";
+import type { StorageGateway } from "../../../../capabilities/storage";
 import type { BaseLLMProvider } from "../../../../generation-core/llm/base-provider.js";
 import { stripConversationPromptTimestamps } from "./transcript-sanitize.js";
 

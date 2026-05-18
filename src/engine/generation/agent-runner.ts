@@ -1,5 +1,6 @@
-import type { AgentContext, AgentResult } from "@marinara-engine/shared";
-import type { LlmGateway, LlmMessage, StorageGateway } from "../capabilities";
+import { BUILT_IN_TOOLS, type AgentContext, type AgentResult } from "../contracts/types/agent";
+import type { LlmGateway, LlmMessage } from "../capabilities/llm";
+import type { StorageGateway } from "../capabilities/storage";
 import type {
   BaseLLMProvider,
   ChatCompleteOptions,
@@ -10,8 +11,19 @@ import type {
 } from "../generation-core/llm/base-provider";
 import { createAgentPipeline, type AgentInjection, type ResolvedAgent } from "../agents-runtime/pipeline/agent-pipeline";
 import type { AgentToolContext } from "../agents-runtime/executor/agent-executor";
+import { appendChatSummaryEntryToMetadata } from "../shared/text/chat-summary-entries";
 import type { GenerationCharacterContext, GenerationPersonaContext } from "./prompt-assembly";
-import { boolish, hiddenFromAi, isRecord, parseRecord, readString, type JsonRecord } from "./runtime-records";
+import {
+  boolish,
+  hiddenFromAi,
+  isRecord,
+  newId,
+  nowIso,
+  parseRecord,
+  readNumber,
+  readString,
+  type JsonRecord,
+} from "./runtime-records";
 
 export interface GenerationAgentRuntimeInput {
   chat: JsonRecord;
@@ -85,7 +97,6 @@ interface CustomToolRecord extends JsonRecord {
   executionType: string;
   webhookUrl: string | null;
   staticResult: string | null;
-  scriptBody: string | null;
   enabled: string | boolean;
 }
 
@@ -140,6 +151,32 @@ function enabledToolNames(settings: Record<string, unknown>): string[] {
   return value.map((item) => readString(item).trim()).filter(Boolean);
 }
 
+function stringSet(value: unknown): Set<string> {
+  if (!Array.isArray(value)) return new Set();
+  return new Set(value.map((item) => readString(item).trim()).filter(Boolean));
+}
+
+function chatMetadata(input: GenerationAgentRuntimeInput): JsonRecord {
+  return parseRecord(input.chat.metadata);
+}
+
+function chatAgentsEnabled(input: GenerationAgentRuntimeInput): boolean {
+  if (input.agentTypes && input.agentTypes.size > 0) return true;
+  return boolish(chatMetadata(input).enableAgents, false);
+}
+
+function chatActiveAgentIds(input: GenerationAgentRuntimeInput): Set<string> {
+  return stringSet(chatMetadata(input).activeAgentIds);
+}
+
+function chatToolsEnabled(input: GenerationAgentRuntimeInput): boolean {
+  return boolish(chatMetadata(input).enableTools, false);
+}
+
+function chatActiveToolIds(input: GenerationAgentRuntimeInput): Set<string> {
+  return stringSet(chatMetadata(input).activeToolIds);
+}
+
 function parseToolParameters(value: unknown): unknown {
   if (!value) return { type: "object", properties: {} };
   if (typeof value === "string") {
@@ -156,7 +193,7 @@ function customToolRecord(row: JsonRecord): CustomToolRecord | null {
   const name = readString(row.name).trim();
   if (!name || !boolish(row.enabled, false)) return null;
   const executionType = readString(row.executionType, "static");
-  if (executionType === "script") return null;
+  if (executionType !== "static" && executionType !== "webhook") return null;
   return {
     ...row,
     name,
@@ -165,7 +202,6 @@ function customToolRecord(row: JsonRecord): CustomToolRecord | null {
     executionType,
     webhookUrl: readString(row.webhookUrl).trim() || null,
     staticResult: readString(row.staticResult),
-    scriptBody: readString(row.scriptBody),
     enabled: row.enabled as string | boolean,
   };
 }
@@ -187,36 +223,317 @@ function customToolDefinition(tool: CustomToolRecord): LLMToolDefinition {
   };
 }
 
+const BUILT_IN_TOOL_MAP = new Map(BUILT_IN_TOOLS.map((tool) => [tool.name, tool]));
+
+function builtInToolDefinition(name: string): LLMToolDefinition | null {
+  const tool = BUILT_IN_TOOL_MAP.get(name);
+  if (!tool) return null;
+  return {
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+  };
+}
+
 function stringifyToolResult(value: unknown): string {
   if (typeof value === "string") return value;
   if (isRecord(value) && typeof value.result === "string") return value.result;
   return JSON.stringify(value ?? null);
 }
 
-function buildCustomToolContext(
+function toolArguments(call: LLMToolCall): JsonRecord {
+  const raw = call.function?.arguments || call.arguments || "{}";
+  if (typeof raw === "string") return parseRecord(raw);
+  return parseRecord(raw);
+}
+
+function stringArg(args: JsonRecord, key: string, fallback = ""): string {
+  return readString(args[key], fallback).trim();
+}
+
+function numberArg(args: JsonRecord, key: string, fallback: number): number {
+  return readNumber(args[key], fallback);
+}
+
+function stringArrayArg(args: JsonRecord, key: string): string[] {
+  const value = args[key];
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => readString(item).trim()).filter(Boolean);
+}
+
+function toolError(message: string): never {
+  throw new Error(message);
+}
+
+function requireChatId(input: GenerationAgentRuntimeInput): string {
+  const chatId = readString(input.chat.id).trim();
+  if (!chatId) toolError("Tool requires a persisted chat id.");
+  return chatId;
+}
+
+async function updateChatMetadata(
   storage: StorageGateway,
+  input: GenerationAgentRuntimeInput,
+  updater: (metadata: JsonRecord) => JsonRecord,
+): Promise<JsonRecord> {
+  const chatId = requireChatId(input);
+  const metadata = updater({ ...parseRecord(input.chat.metadata) });
+  await storage.update("chats", chatId, { metadata });
+  input.chat.metadata = metadata;
+  return metadata;
+}
+
+function rollDiceNotation(notation: string) {
+  const match = notation.trim().match(/^(\d*)d(\d+)([+-]\d+)?$/i);
+  if (!match) toolError("Dice notation must look like 1d20, 2d6, or 3d8+2.");
+  const count = Math.max(1, Math.min(100, Number(match[1] || "1")));
+  const sides = Math.max(2, Math.min(1000, Number(match[2])));
+  const modifier = Number(match[3] || "0");
+  const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
+  return {
+    notation: `${count}d${sides}${modifier === 0 ? "" : modifier > 0 ? `+${modifier}` : modifier}`,
+    rolls,
+    modifier,
+    total: rolls.reduce((sum, value) => sum + value, 0) + modifier,
+  };
+}
+
+async function searchLorebookTool(storage: StorageGateway, input: GenerationAgentRuntimeInput, args: JsonRecord) {
+  const query = stringArg(args, "query").toLowerCase();
+  if (!query) toolError("query is required.");
+  const category = stringArg(args, "category").toLowerCase();
+  const tokens = query.split(/\s+/).filter((token) => token.length > 1);
+  const rows = await storage.list<JsonRecord>("lorebook-entries").catch(() => []);
+  const activated = input.activatedLorebookEntries.map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    content: entry.content,
+    tag: entry.tag,
+    source: "activated",
+  }));
+  const stored = rows.map((entry) => ({
+    id: readString(entry.id),
+    name: readString(entry.name || entry.comment || entry.title, "Lorebook entry"),
+    content: readString(entry.content),
+    tag: readString(entry.tag || entry.category || entry.position),
+    source: "stored",
+  }));
+  const seen = new Set<string>();
+  const scored = [...activated, ...stored]
+    .filter((entry) => {
+      if (!entry.id || seen.has(entry.id)) return false;
+      seen.add(entry.id);
+      if (category && !`${entry.name} ${entry.tag}`.toLowerCase().includes(category)) return false;
+      return true;
+    })
+    .map((entry) => {
+      const haystack = `${entry.name} ${entry.tag} ${entry.content}`.toLowerCase();
+      const score =
+        (haystack.includes(query) ? 10 : 0) +
+        tokens.reduce((sum, token) => sum + (haystack.includes(token) ? 1 : 0), 0);
+      return { ...entry, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      tag: entry.tag || null,
+      source: entry.source,
+      score: entry.score,
+      content: entry.content.slice(0, 4000),
+    }));
+  return { query, entries: scored };
+}
+
+async function executeBuiltInTool(
+  storage: StorageGateway,
+  input: GenerationAgentRuntimeInput,
+  agent: JsonRecord,
+  call: LLMToolCall,
+): Promise<unknown> {
+  const toolName = call.function?.name || call.name;
+  const args = toolArguments(call);
+  const chatId = requireChatId(input);
+
+  switch (toolName) {
+    case "roll_dice": {
+      const notation = stringArg(args, "notation");
+      if (!notation) toolError("notation is required.");
+      return { ...rollDiceNotation(notation), reason: stringArg(args, "reason") || null };
+    }
+    case "update_game_state": {
+      const update = {
+        id: newId("game_state_update"),
+        createdAt: nowIso(),
+        type: stringArg(args, "type"),
+        target: stringArg(args, "target"),
+        key: stringArg(args, "key"),
+        value: stringArg(args, "value"),
+        description: stringArg(args, "description"),
+      };
+      if (!update.type || !update.target || !update.key) toolError("type, target, and key are required.");
+      const metadata = parseRecord(input.chat.metadata);
+      const updates = Array.isArray(metadata.agentGameStateUpdates) ? metadata.agentGameStateUpdates : [];
+      metadata.agentGameStateUpdates = [...updates, update].slice(-100);
+      const gameState = isRecord(input.chat.gameState) ? { ...input.chat.gameState } : {};
+      if (update.type === "location_change") gameState.location = update.value;
+      if (update.type === "time_advance") gameState.time = update.value;
+      await storage.update("chats", chatId, { metadata, gameState });
+      input.chat.metadata = metadata;
+      input.chat.gameState = gameState;
+      return { success: true, update, gameState };
+    }
+    case "set_expression": {
+      const characterName = stringArg(args, "characterName");
+      const expression = stringArg(args, "expression");
+      if (!characterName || !expression) toolError("characterName and expression are required.");
+      const metadata = await updateChatMetadata(storage, input, (current) => {
+        const expressions = parseRecord(current.agentExpressions);
+        expressions[characterName] = expression;
+        return { ...current, agentExpressions: expressions };
+      });
+      return { success: true, characterName, expression, expressions: metadata.agentExpressions };
+    }
+    case "trigger_event": {
+      const event = {
+        id: newId("agent_event"),
+        createdAt: nowIso(),
+        eventType: stringArg(args, "eventType"),
+        description: stringArg(args, "description"),
+        involvedCharacters: stringArrayArg(args, "involvedCharacters"),
+      };
+      if (!event.eventType || !event.description) toolError("eventType and description are required.");
+      await updateChatMetadata(storage, input, (current) => {
+        const events = Array.isArray(current.agentEvents) ? current.agentEvents : [];
+        return { ...current, agentEvents: [...events, event].slice(-100) };
+      });
+      return { success: true, event };
+    }
+    case "search_lorebook":
+      return searchLorebookTool(storage, input, args);
+    case "read_chat_summary":
+      return { summary: (input.chatSummary ?? readString(parseRecord(input.chat.metadata).summary)) || null };
+    case "append_chat_summary": {
+      const text = stringArg(args, "text");
+      if (!text) toolError("text is required.");
+      const now = nowIso();
+      const metadata = parseRecord(input.chat.metadata);
+      const appended = appendChatSummaryEntryToMetadata(
+        metadata,
+        {
+          content: text,
+          origin: "automated",
+          sourceMode: "agent",
+          title: "Agent memory",
+        },
+        { now, createId: () => newId("summary") },
+      );
+      metadata.summaryEntries = appended.entries;
+      metadata.summary = appended.summary;
+      await storage.update("chats", chatId, { metadata });
+      input.chat.metadata = metadata;
+      input.chatSummary = appended.summary;
+      return { success: true, entry: appended.entry, summary: appended.summary };
+    }
+    case "read_chat_variable": {
+      const key = stringArg(args, "key");
+      if (!key) toolError("key is required.");
+      const variables = parseRecord(parseRecord(input.chat.metadata).agentVariables);
+      return { key, value: typeof variables[key] === "string" ? variables[key] : null };
+    }
+    case "write_chat_variable": {
+      const key = stringArg(args, "key");
+      const value = stringArg(args, "value");
+      if (!key) toolError("key is required.");
+      await updateChatMetadata(storage, input, (current) => {
+        const variables = parseRecord(current.agentVariables);
+        variables[key] = value;
+        return { ...current, agentVariables: variables };
+      });
+      return { success: true, key, value };
+    }
+    case "spotify_get_current_playback":
+      return storage.request("GET", `/spotify/player?agentId=${encodeURIComponent(spotifyAgentId(agent))}`);
+    case "spotify_get_playlists": {
+      const limit = Math.max(1, Math.min(50, Math.trunc(numberArg(args, "limit", 20))));
+      return storage.request("GET", `/spotify/playlists?agentId=${encodeURIComponent(spotifyAgentId(agent))}&limit=${limit}`);
+    }
+    case "spotify_get_playlist_tracks": {
+      const playlistId = stringArg(args, "playlistId");
+      if (!playlistId) toolError("playlistId is required.");
+      const body: JsonRecord = {
+        agentId: spotifyAgentId(agent),
+        playlistId,
+        query: stringArg(args, "query"),
+        mood: stringArg(args, "mood"),
+        limit: Math.max(1, Math.min(80, Math.trunc(numberArg(args, "candidateLimit", numberArg(args, "limit", 50))))),
+      };
+      const offset = numberArg(args, "offset", Number.NaN);
+      if (Number.isFinite(offset)) body.offset = Math.max(0, Math.trunc(offset));
+      return storage.request("POST", "/spotify/playlist-tracks", body);
+    }
+    case "spotify_search":
+      return storage.request("POST", "/spotify/search-tracks", {
+        agentId: spotifyAgentId(agent),
+        query: stringArg(args, "query"),
+        limit: Math.max(1, Math.min(50, Math.trunc(numberArg(args, "limit", 10)))),
+      });
+    case "spotify_play": {
+      const uri = stringArg(args, "uri");
+      const uris = stringArrayArg(args, "uris");
+      if (!uri && uris.length === 0) toolError("uri or uris is required.");
+      const body: JsonRecord = { agentId: spotifyAgentId(agent) };
+      if (uris.length > 0) body.uris = uris;
+      else if (uri.startsWith("spotify:track:")) body.uri = uri;
+      else body.contextUri = uri;
+      return storage.request("PUT", "/spotify/player/play", body);
+    }
+    case "spotify_set_volume":
+      return storage.request("PUT", "/spotify/player/volume", {
+        agentId: spotifyAgentId(agent),
+        volume: Math.max(0, Math.min(100, Math.trunc(numberArg(args, "volume", 50)))),
+      });
+    default:
+      return null;
+  }
+}
+
+function spotifyAgentId(agent: JsonRecord): string {
+  const settings = agentSettings(agent);
+  return readString(settings.spotifyAgentId).trim() || readString(agent.id).trim() || "spotify";
+}
+
+function buildAgentToolContext(
+  storage: StorageGateway,
+  input: GenerationAgentRuntimeInput,
+  agent: JsonRecord,
   settings: Record<string, unknown>,
   customTools: Map<string, CustomToolRecord>,
 ): AgentToolContext | undefined {
-  const selected = enabledToolNames(settings)
+  if (!chatToolsEnabled(input)) return undefined;
+  const scopedToolIds = chatActiveToolIds(input);
+  const selectedNames = enabledToolNames(settings).filter((name) => scopedToolIds.size === 0 || scopedToolIds.has(name));
+  const selectedBuiltIns = selectedNames
+    .map(builtInToolDefinition)
+    .filter((tool): tool is LLMToolDefinition => !!tool);
+  const selectedCustomTools = selectedNames
     .map((name) => customTools.get(name))
     .filter((tool): tool is CustomToolRecord => !!tool);
-  if (selected.length === 0) return undefined;
+  if (selectedBuiltIns.length === 0 && selectedCustomTools.length === 0) return undefined;
 
   return {
-    tools: selected.map(customToolDefinition),
+    tools: [...selectedBuiltIns, ...selectedCustomTools.map(customToolDefinition)],
     executeToolCall: async (call: LLMToolCall) => {
       const toolName = call.function?.name || call.name;
-      let args: unknown = {};
-      try {
-        args = JSON.parse(call.function?.arguments || call.arguments || "{}");
-      } catch {
-        args = {};
+      if (BUILT_IN_TOOL_MAP.has(toolName)) {
+        return stringifyToolResult(await executeBuiltInTool(storage, input, agent, call));
       }
       return stringifyToolResult(
         await storage.request("POST", "/custom-tools/execute", {
           toolName,
-          arguments: args,
+          arguments: toolArguments(call),
         }),
       );
     },
@@ -232,11 +549,15 @@ function parseMaybeJson(value: string): unknown {
 }
 
 async function resolveAgents(deps: AgentDeps, input: GenerationAgentRuntimeInput): Promise<ResolvedAgent[]> {
+  if (!chatAgentsEnabled(input)) return [];
+  const scopedAgentIds = chatActiveAgentIds(input);
   const rows = (await deps.storage.list<JsonRecord>("agents"))
     .filter((agent) => boolish(agent.enabled, false))
     .filter((agent) => {
-      if (!input.agentTypes || input.agentTypes.size === 0) return true;
       const type = readString(agent.type || agent.agentType);
+      const id = readString(agent.id);
+      if (scopedAgentIds.size > 0 && !scopedAgentIds.has(type) && !scopedAgentIds.has(id)) return false;
+      if (!input.agentTypes || input.agentTypes.size === 0) return true;
       return input.agentTypes.has(type);
     });
   const customTools = await loadCustomTools(deps.storage);
@@ -258,7 +579,7 @@ async function resolveAgents(deps: AgentDeps, input: GenerationAgentRuntimeInput
       provider: llmProvider(deps.llm, connectionId),
       model,
       maxParallelJobs: typeof settings.maxParallelJobs === "number" ? settings.maxParallelJobs : undefined,
-      toolContext: buildCustomToolContext(deps.storage, settings, customTools),
+      toolContext: buildAgentToolContext(deps.storage, input, agent, settings, customTools),
     });
   }
   return resolved;

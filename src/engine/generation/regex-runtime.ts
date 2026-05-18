@@ -1,5 +1,5 @@
-import { applyRegexReplacement } from "@marinara-engine/shared";
-import type { StorageGateway } from "../capabilities";
+import { applyRegexReplacement } from "../shared/regex/regex-replacement";
+import type { StorageGateway } from "../capabilities/storage";
 import { bySortOrder, boolish, readString, stringArray, type JsonRecord } from "./runtime-records";
 
 type RegexPlacement = "user_input" | "ai_output";

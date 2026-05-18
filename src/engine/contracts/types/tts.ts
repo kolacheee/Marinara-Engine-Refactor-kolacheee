@@ -129,7 +129,7 @@ export type TTSConfig = z.infer<typeof ttsConfigSchema>;
 export const TTS_SETTINGS_KEY = "tts";
 export const TTS_API_KEY_MASK = "••••••";
 
-/** Returned by GET /api/tts/voices */
+/** Returned when listing native TTS voices. */
 export interface TTSVoicesResponse {
   voices: string[];
   voiceOptions?: Array<{

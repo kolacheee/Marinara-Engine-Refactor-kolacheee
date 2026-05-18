@@ -20,20 +20,9 @@ import { useGameAssetStore } from "../stores/game-asset.store";
 import { useCombatRound } from "../hooks/use-game";
 import { useTTSConfig } from "../../../shared/hooks/use-tts";
 import { AnimatedText } from "./AnimatedText";
-import type {
-  Combatant,
-  CombatAttackResult,
-  CombatRoundResult,
-  CombatPlayerAction,
-  CombatSummary,
-  CombatDialogueCue,
-  CombatItemEffect,
-  CombatMechanic,
-  CombatSkill,
-  CombatStatus,
-  PartyDialogueLine,
-  TTSConfig,
-} from "@marinara-engine/shared";
+import type { CombatDialogueCue, CombatItemEffect, CombatMechanic, CombatStatus } from "../../../engine/contracts/types/combat-encounter";
+import type { Combatant, CombatAttackResult, CombatRoundResult, CombatPlayerAction, CombatSummary, CombatSkill, PartyDialogueLine } from "../../../engine/contracts/types/game";
+import type { TTSConfig } from "../../../engine/contracts/types/tts";
 import {
   Heart,
   Droplets,
@@ -57,8 +46,7 @@ import {
 
 // `combatant.sprite` is populated either from a real avatar URL (player party,
 // from the character sheet's `avatarUrl`) or from the encounter LLM, which is
-// instructed to emit "emoji or brief visual description" (see
-// `packages/server/src/routes/encounter.routes.ts`). Treat the field as a
+// instructed to emit "emoji or brief visual description". Treat the field as a
 // shape-tagged value so the renderer picks `<img>`, an emoji glyph, or the
 // initials fallback instead of stuffing free text into `<img src>`.
 type SpriteKind = { kind: "url"; value: string } | { kind: "emoji"; value: string } | { kind: "none" };

@@ -1,16 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  checkConversationAutonomous,
-  checkConversationCharacterExchange,
-  clearGenerationInProgress,
-  generateConversationSchedules,
-  getConversationBusyDelay,
-  markGenerationInProgress,
-  recordAssistantActivity as recordAssistantActivityState,
-  recordAutonomousClientPresence,
-  recordUserActivity as recordUserActivityState,
-} from "../../../engine/modes/chat";
+import { checkConversationAutonomous, checkConversationCharacterExchange, clearGenerationInProgress, getConversationBusyDelay, markGenerationInProgress, recordAssistantActivity as recordAssistantActivityState, recordAutonomousClientPresence, recordUserActivity as recordUserActivityState } from "../../../engine/modes/chat/autonomous/autonomous.service";
+import { generateConversationSchedules } from "../../../engine/modes/chat/schedules/schedule.service";
 import { llmApi } from "../../../shared/api/llm-api";
 import { storageApi } from "../../../shared/api/storage-api";
 import { useChatStore } from "../../../shared/stores/chat.store";

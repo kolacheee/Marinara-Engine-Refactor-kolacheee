@@ -3,7 +3,8 @@
 // ──────────────────────────────────────────────
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../shared/api/api-client";
-import type { CreateExtensionInput, InstalledExtension, UpdateExtensionInput } from "@marinara-engine/shared";
+import type { CreateExtensionInput, UpdateExtensionInput } from "../../../engine/contracts/schemas/extension.schema";
+import type { InstalledExtension } from "../../../engine/contracts/types/extension";
 
 export const extensionKeys = {
   all: ["extensions"] as const,

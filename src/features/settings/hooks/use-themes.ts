@@ -3,7 +3,8 @@
 // ──────────────────────────────────────────────
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../shared/api/api-client";
-import type { CreateThemeInput, Theme, UpdateThemeInput } from "@marinara-engine/shared";
+import type { CreateThemeInput, UpdateThemeInput } from "../../../engine/contracts/schemas/theme.schema";
+import type { Theme } from "../../../engine/contracts/types/theme";
 
 export const themeKeys = {
   all: ["themes"] as const,

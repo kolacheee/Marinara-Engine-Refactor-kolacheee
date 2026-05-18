@@ -1,22 +1,6 @@
-// ──────────────────────────────────────────────
-// Scene Post-Processing
-//
-// Fuzzy-matches the raw model output (which may
-// contain prose descriptions instead of exact
-// asset tags) against the available asset lists,
-// normalizes expression labels, and filters
-// widget updates to valid IDs.
-// ──────────────────────────────────────────────
-
-import type {
-  DirectionCommand,
-  SceneAnalysis,
-  SceneIllustrationRequest,
-  SceneSegmentEffect,
-  SceneSpotifyTrackCandidate,
-  SceneSpotifyTrackSelection,
-} from "@marinara-engine/shared";
-import { normalizeLocationKind, normalizeMusicGenre, normalizeMusicIntensity } from "@marinara-engine/shared";
+import type { DirectionCommand } from "../../../contracts/types/game";
+import type { SceneAnalysis, SceneIllustrationRequest, SceneSegmentEffect, SceneSpotifyTrackCandidate, SceneSpotifyTrackSelection } from "../../../contracts/types/scene";
+import { normalizeLocationKind, normalizeMusicGenre, normalizeMusicIntensity } from "../../../shared/scoring/music-score";
 
 const logger = {
   debug: (..._args: unknown[]) => undefined,

@@ -4,8 +4,8 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const SPOTIFY_CALLBACK_HOST: &str = "127.0.0.1";
-const SPOTIFY_CALLBACK_PORT: u16 = 7860;
-const SPOTIFY_CALLBACK_PATH: &str = "/api/spotify/callback";
+const SPOTIFY_CALLBACK_PORT: u16 = 8754;
+const SPOTIFY_CALLBACK_PATH: &str = "/spotify/callback";
 const AUTH_TTL_MS: u128 = 10 * 60_000;
 
 pub(super) fn start_callback_listener(state: AppState) -> bool {

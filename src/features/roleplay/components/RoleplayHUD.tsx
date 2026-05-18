@@ -30,15 +30,8 @@ import { useAgentConfigs, useCustomAgentRuns, type AgentConfigRow } from "../../
 import { useChat } from "../../chats/hooks/use-chats";
 import { discardPendingGameStatePatch, useGameStatePatcher } from "../../world-state/hooks/use-world-state-patcher";
 import { useUIStore } from "../../../shared/stores/ui.store";
-import type {
-  GameState,
-  PresentCharacter,
-  CharacterStat,
-  InventoryItem,
-  QuestProgress,
-  CustomTrackerField,
-  Message,
-} from "@marinara-engine/shared";
+import type { Message } from "../../../engine/contracts/types/chat";
+import type { GameState, PresentCharacter, CharacterStat, InventoryItem, QuestProgress, CustomTrackerField } from "../../../engine/contracts/types/game-state";
 import type { HudPosition } from "../../../shared/stores/ui.store";
 
 const ACTIONS_DROPDOWN_WIDTH_PX = 288;

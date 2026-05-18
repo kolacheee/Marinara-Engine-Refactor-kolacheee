@@ -5,9 +5,7 @@
 /** Supported API providers. */
 export type APIProvider =
   | "openai"
-  | "openai_chatgpt"
   | "anthropic"
-  | "claude_subscription"
   | "google"
   | "google_vertex"
   | "mistral"

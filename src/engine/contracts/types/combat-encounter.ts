@@ -189,7 +189,7 @@ export interface EncounterSettings {
 // API Request / Response Types
 // ──────────────────────────────────────────────
 
-/** Payload for POST /api/encounter/init */
+/** Payload for initializing an encounter. */
 export interface EncounterInitRequest {
   chatId: string;
   connectionId: string | null;
@@ -198,12 +198,12 @@ export interface EncounterInitRequest {
   spellbookId?: string | null;
 }
 
-/** Response from POST /api/encounter/init */
+/** Response from encounter initialization. */
 export interface EncounterInitResponse {
   combatState: CombatInitState;
 }
 
-/** Payload for POST /api/encounter/action */
+/** Payload for resolving an encounter action. */
 export interface EncounterActionRequest {
   chatId: string;
   connectionId: string | null;
@@ -220,12 +220,12 @@ export interface EncounterActionRequest {
   spellbookId?: string | null;
 }
 
-/** Response from POST /api/encounter/action */
+/** Response from encounter action resolution. */
 export interface EncounterActionResponse {
   result: CombatActionResult;
 }
 
-/** Payload for POST /api/encounter/summary */
+/** Payload for summarizing an encounter. */
 export interface EncounterSummaryRequest {
   chatId: string;
   connectionId: string | null;
@@ -234,7 +234,7 @@ export interface EncounterSummaryRequest {
   settings: EncounterSettings;
 }
 
-/** Response from POST /api/encounter/summary */
+/** Response from encounter summarization. */
 export interface EncounterSummaryResponse {
   summary: string;
   messageId: string;

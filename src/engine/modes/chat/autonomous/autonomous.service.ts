@@ -1,11 +1,4 @@
-// ──────────────────────────────────────────────
-// Conversation: Autonomous Messaging Service
-// ──────────────────────────────────────────────
-// Tracks user inactivity per chat and determines when characters
-// should send autonomous messages. Also handles character-to-character
-// exchanges in group chats.
-
-import type { StorageGateway } from "../../../capabilities";
+import type { StorageGateway } from "../../../capabilities/storage";
 import { getBusyDelay, getCurrentStatus, type WeekSchedule } from "../schedules/schedule.service.js";
 
 // ── Types ──

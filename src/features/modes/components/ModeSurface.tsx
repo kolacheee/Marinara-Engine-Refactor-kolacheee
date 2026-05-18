@@ -43,20 +43,17 @@ import { chatBackgroundMetadataToUrl, chatBackgroundUrlToMetadata } from "../../
 import { useGameStateStore } from "../../world-state/stores/world-state.store";
 import { toast } from "sonner";
 import { BookOpen, Check, HelpCircle, MessageSquare, Theater, X } from "lucide-react";
-import {
-  APP_VERSION,
-  BUILT_IN_AGENTS,
-  buildGuidedGenerationInstructionMessage,
-  type SpritePlacement,
-  type SpriteSide,
-} from "@marinara-engine/shared";
+import { APP_VERSION } from "../../../engine/contracts/constants/defaults";
+import { BUILT_IN_AGENTS } from "../../../engine/contracts/types/agent";
+import type { SpritePlacement, SpriteSide } from "../../../engine/contracts/types/chat";
+import { buildGuidedGenerationInstructionMessage } from "../../../engine/shared/text/generation-guide";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { useAgentStore } from "../../../shared/stores/agent.store";
 import { cn, parseAvatarCropJson } from "../../../shared/lib/utils";
 import { Modal } from "../../../shared/components/ui/Modal";
 import { useEncounter } from "../../encounter/hooks/use-encounter";
 import { useScene } from "../../roleplay/hooks/use-scene";
-import { useEncounterStore } from "../../encounter/stores/encounter.store";
+import { useEncounterStore } from "../../../shared/stores/encounter.store";
 import { worldStateApi } from "../../world-state/api/world-state-api";
 import { useTranslationStore } from "../../../shared/stores/translation.store";
 import { ttsService } from "../../../shared/lib/tts-service";
@@ -421,8 +418,8 @@ export function ModeSurface() {
     [chatMeta.spritePlacements],
   );
   const hasCustomSpritePlacements = Object.keys(spritePlacements).length > 0;
-  // Prefer per-swipe expressions from the last assistant message's extra (survives swipe switching),
-  // falling back to chat-level metadata for backward compatibility.
+  // Per-swipe expressions live on the latest assistant message extra so swipe
+  // changes do not leak sprite state across branches.
   const spriteExpressions: Record<string, string> = useMemo(() => {
     if (messages?.length) {
       for (let i = messages.length - 1; i >= 0; i--) {
@@ -436,8 +433,8 @@ export function ModeSurface() {
         }
       }
     }
-    return chatMeta.spriteExpressions ?? {};
-  }, [messages, chatMeta.spriteExpressions]);
+    return {};
+  }, [messages]);
   const groupChatMode: string | undefined = chatCharIds.length > 1 ? (chatMeta.groupChatMode ?? "merged") : undefined;
 
   const updateMeta = useUpdateChatMetadata();
@@ -578,8 +575,6 @@ export function ModeSurface() {
   const persistSpriteExpressions = useCallback(
     (expressions: Record<string, string>) => {
       if (!chat?.id) return;
-      updateMeta.mutate({ id: chat.id, spriteExpressions: expressions });
-      // Also persist to the last assistant message's extra so it's per-swipe
       if (messages?.length) {
         for (let i = messages.length - 1; i >= 0; i--) {
           const m = messages[i]!;
@@ -593,7 +588,7 @@ export function ModeSurface() {
         }
       }
     },
-    [chat?.id, updateMeta, messages, updateMessageExtra],
+    [chat?.id, messages, updateMessageExtra],
   );
 
   const handleExpressionChange = useCallback(
@@ -1821,6 +1816,7 @@ export function ModeSurface() {
             onEdit={handleEdit}
             onSetActiveSwipe={handleSetActiveSwipe}
             onPeekPrompt={handlePeekPrompt}
+            onToggleHiddenFromAI={handleToggleHiddenFromAI}
             onToggleSelectMessage={handleToggleSelectMessage}
             onSwitchChat={chat?.connectedChatId ? () => setActiveChatId(chat.connectedChatId!) : undefined}
             onConcludeScene={chatMeta.sceneStatus === "active" ? () => concludeScene(activeChatId) : undefined}

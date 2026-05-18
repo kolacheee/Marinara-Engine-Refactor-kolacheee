@@ -36,7 +36,8 @@ import { storageApi } from "../../../shared/api/storage-api";
 import { filterLanguageGenerationConnections } from "../../../shared/lib/connection-filters";
 import { getCharacterTitle, parseCharacterDisplayData } from "../../../shared/lib/character-display";
 import { ChoiceSelectionModal } from "../../presets/components/ChoiceSelectionModal";
-import type { Chat, ChatMode, ChatPreset } from "@marinara-engine/shared";
+import type { Chat, ChatMode } from "../../../engine/contracts/types/chat";
+import type { ChatPreset } from "../../../engine/contracts/types/chat-preset";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   CHAT_PARAMETER_DEFAULTS,

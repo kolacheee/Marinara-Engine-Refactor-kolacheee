@@ -25,13 +25,7 @@ import {
 import { cn } from "../../../shared/lib/utils";
 import { api } from "../../../shared/api/api-client";
 import { useAgentConfigs, useUpdateAgent, type AgentConfigRow } from "../../agents/hooks/use-agents";
-import type {
-  CharacterStat,
-  CustomTrackerField,
-  InventoryItem,
-  PresentCharacter,
-  QuestProgress,
-} from "@marinara-engine/shared";
+import type { CharacterStat, CustomTrackerField, InventoryItem, PresentCharacter, QuestProgress } from "../../../engine/contracts/types/game-state";
 
 interface CombinedPlayerPanelProps {
   showPersona: boolean;

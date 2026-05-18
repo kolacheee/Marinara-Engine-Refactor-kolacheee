@@ -8,7 +8,7 @@ import { useAgentStore } from "../../../shared/stores/agent.store";
 import { useGenerate } from "../../generation/hooks/use-generate";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
-import type { Message } from "@marinara-engine/shared";
+import type { Message } from "../../../engine/contracts/types/chat";
 
 type CyoaChoice = {
   label: string;

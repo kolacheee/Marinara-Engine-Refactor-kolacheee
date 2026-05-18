@@ -57,10 +57,6 @@ function base64ToBlob(base64: string, contentType: string): Blob {
   return new Blob(chunks, { type: contentType });
 }
 
-export const generationUtilityApi = {
-  abort: (chatId: string) => api.post("/generate/abort", { chatId }),
-};
-
 export const gifsApi = {
   search: (input: { q?: string; limit?: number; pos?: string }) => {
     const params = new URLSearchParams({ limit: String(input.limit ?? 20) });

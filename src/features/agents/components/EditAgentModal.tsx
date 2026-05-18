@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../shared/api/api-client";
 import { useConnections } from "../../connections/hooks/use-connections";
 import { Loader2, Sparkles, Save } from "lucide-react";
-import { type AgentPhase } from "@marinara-engine/shared";
+import type { AgentPhase } from "../../../engine/contracts/types/agent";
 
 export interface AgentData {
   id?: string;

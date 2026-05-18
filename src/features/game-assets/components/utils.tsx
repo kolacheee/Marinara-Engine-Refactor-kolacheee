@@ -2,7 +2,7 @@
 // File Browser — utilities (client)
 // ──────────────────────────────────────────────
 import { File, FileAudio, FileImage, FileText } from "lucide-react";
-import { IMAGE_EXTS, AUDIO_EXTS, TEXT_EXTS } from "@marinara-engine/shared";
+import { IMAGE_EXTS, AUDIO_EXTS, TEXT_EXTS } from "../../../engine/contracts/constants/game-assets";
 import type { TreeNode } from "../hooks/use-game-assets";
 
 export function isImage(ext?: string) {

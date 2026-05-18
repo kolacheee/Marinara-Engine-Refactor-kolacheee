@@ -68,7 +68,7 @@ export function ImportCharacterModal({ open, onClose }: Props) {
           continue;
         }
 
-        // Marinara native packages are .marinara zip files (data.json + avatar
+        // Marinara native files are .marinara zip files (data.json + avatar
         // binary). Detect via the zip signature so a renamed file still works.
         if (await isZipFile(file)) {
           marinaraPackages.push(file);
@@ -183,7 +183,7 @@ export function ImportCharacterModal({ open, onClose }: Props) {
             JSON.stringify({ createdAt: file.lastModified, updatedAt: file.lastModified }),
           );
           const result = await api.upload<{ success: boolean; name?: string; error?: string }>(
-            "/import/marinara-package",
+            "/import/marinara-file",
             form,
           );
           nextResults.push({

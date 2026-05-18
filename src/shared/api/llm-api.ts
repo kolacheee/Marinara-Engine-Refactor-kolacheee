@@ -1,28 +1,68 @@
-import type { LlmChunk, LlmGateway, LlmRequest } from "../../engine/capabilities";
+import type { LlmChunk, LlmGateway, LlmRequest } from "../../engine/capabilities/llm";
+import { Channel } from "@tauri-apps/api/core";
 import { invokeTauri } from "./tauri-client";
 
 export const llmApi: LlmGateway = {
   complete: (request: LlmRequest) =>
-    invokeTauri("api_request", {
-      method: "POST",
-      path: "/llm/complete",
-      body: request,
+    invokeTauri("llm_complete", {
+      request,
     }),
   stream: async function* (request: LlmRequest, signal?: AbortSignal): AsyncGenerator<LlmChunk> {
-    const events = await invokeTauri<LlmChunk[]>("api_stream_events", {
-      path: "/llm/stream",
-      body: request,
-    });
-    for (const event of events) {
-      if (signal?.aborted) throw new DOMException("The operation was aborted.", "AbortError");
+    const queue: LlmChunk[] = [];
+    let completed = false;
+    let failure: unknown = null;
+    let wake: (() => void) | null = null;
+
+    const notify = () => {
+      wake?.();
+      wake = null;
+    };
+    const abort = () => {
+      failure = new DOMException("The operation was aborted.", "AbortError");
+      notify();
+    };
+
+    if (signal?.aborted) abort();
+    signal?.addEventListener("abort", abort, { once: true });
+
+    const onEvent = new Channel<LlmChunk>((event) => {
       const text = typeof event.text === "string" ? event.text : typeof event.data === "string" ? event.data : undefined;
-      yield text === undefined ? event : { ...event, text };
+      const normalized = text === undefined ? event : { ...event, text };
+      if (normalized.type === "done" || normalized.type === "error") completed = true;
+      queue.push(normalized);
+      notify();
+    });
+
+    const command = invokeTauri<void>("llm_stream_channel", {
+      request,
+      onEvent,
+    }).catch((error) => {
+      failure = error;
+      completed = true;
+      notify();
+    });
+
+    try {
+      while (!completed || queue.length > 0) {
+        if (failure) throw failure;
+        if (queue.length === 0) {
+          await new Promise<void>((resolve) => {
+            wake = resolve;
+          });
+          continue;
+        }
+        const event = queue.shift()!;
+        if (event.type === "error") throw new Error(String(event.text ?? event.data ?? "LLM stream failed"));
+        yield event;
+      }
+      await command;
+      if (failure) throw failure;
+    } finally {
+      signal?.removeEventListener("abort", abort);
     }
   },
   listModels: (connectionId?: string | null) =>
-    invokeTauri("api_request", {
-      method: "GET",
-      path: `/llm/models${connectionId ? `?connectionId=${encodeURIComponent(connectionId)}` : ""}`,
-      body: null,
+    invokeTauri("llm_list_models", {
+      connectionId: connectionId ?? null,
     }),
 };

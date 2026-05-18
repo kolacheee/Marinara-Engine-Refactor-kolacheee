@@ -1,4 +1,5 @@
-import type { LlmGateway, LlmMessage, StorageGateway } from "../capabilities";
+import type { LlmGateway, LlmMessage } from "../capabilities/llm";
+import type { StorageGateway } from "../capabilities/storage";
 import { parseGameJsonish } from "../shared/parsing-jsonish";
 
 export type CharacterMakerData = {

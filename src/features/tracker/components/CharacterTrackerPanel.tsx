@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Users } from "lucide-react";
-import type { PresentCharacter } from "@marinara-engine/shared";
+import type { PresentCharacter } from "../../../engine/contracts/types/game-state";
 import type { TrackerPanelSide } from "../../../shared/stores/ui.store";
 import { cn } from "../../../shared/lib/utils";
 import {

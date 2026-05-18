@@ -2,7 +2,8 @@
 // Zustand Store: Game State Slice (RPG Companion)
 // ──────────────────────────────────────────────
 import { create } from "zustand";
-import { coerceGameStateTextFields, type GameState } from "@marinara-engine/shared";
+import type { GameState } from "../../../engine/contracts/types/game-state";
+import { coerceGameStateTextFields } from "../../../engine/shared/game-state/game-state-text";
 
 interface GameStateStore {
   current: GameState | null;

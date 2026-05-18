@@ -1,17 +1,5 @@
-// ──────────────────────────────────────────────
-// Lorebook: Keyword Scanner
-// Scans chat messages against lorebook entry keys
-// and returns activated entries respecting all
-// matching rules (regex, whole-word, case, selective).
-// ──────────────────────────────────────────────
-import type {
-  ActivationCondition,
-  LorebookEntry,
-  LorebookFilterMode,
-  LorebookMatchingSource,
-  LorebookSchedule,
-} from "@marinara-engine/shared";
-import { testPrimaryKeys, testSecondaryKeys } from "@marinara-engine/shared";
+import type { ActivationCondition, LorebookEntry, LorebookFilterMode, LorebookMatchingSource, LorebookSchedule } from "../../contracts/types/lorebook";
+import { testPrimaryKeys, testSecondaryKeys } from "../../shared/regex/lorebook-keyword-matching";
 import { vmRegexExecutor } from "./regex-timeout.js";
 
 /** Compute cosine similarity between two vectors. Returns 0 for empty/mismatched vectors. */

@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import type { SkillCheckResult } from "@marinara-engine/shared";
+import type { SkillCheckResult } from "../../../engine/contracts/types/game";
 import { cn } from "../../../shared/lib/utils";
 
 interface GameSkillCheckResultProps {

@@ -11,10 +11,17 @@ export function useTranslate() {
   const setTranslating = useTranslationStore((s) => s.setTranslating);
 
   const translate = useCallback(
-    async (messageId?: string, content?: string, _chatId?: string) => {
+    async (messageId?: string, content?: string, chatId?: string) => {
       if (!messageId || !content?.trim()) return;
       if (translations[messageId]) {
         removeTranslation(messageId);
+        if (chatId) {
+          api
+            .patch(`/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/extra`, {
+              translation: null,
+            })
+            .catch((error) => console.warn("[translation] Failed to clear persisted translation", error));
+        }
         return;
       }
       setTranslating(messageId, true);
@@ -28,6 +35,13 @@ export function useTranslate() {
           deeplxUrl: config.deeplxUrl,
         });
         setTranslation(messageId, result.translatedText);
+        if (chatId) {
+          await api
+            .patch(`/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/extra`, {
+              translation: result.translatedText,
+            })
+            .catch((error) => console.warn("[translation] Failed to persist translation", error));
+        }
       } finally {
         setTranslating(messageId, false);
       }

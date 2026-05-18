@@ -35,12 +35,7 @@ import {
 import { cn } from "../../../shared/lib/utils";
 import { showConfirmDialog } from "../../../shared/lib/app-dialogs";
 import { useUpdateLorebookEntry, useDeleteLorebookEntry } from "../../lorebooks/hooks/use-lorebooks";
-import type {
-  LorebookEntry,
-  LorebookFilterMode,
-  LorebookFolder,
-  LorebookMatchingSource,
-} from "@marinara-engine/shared";
+import type { LorebookEntry, LorebookFilterMode, LorebookFolder, LorebookMatchingSource } from "../../../engine/contracts/types/lorebook";
 import {
   ExpandableTextarea,
   FieldGroup,

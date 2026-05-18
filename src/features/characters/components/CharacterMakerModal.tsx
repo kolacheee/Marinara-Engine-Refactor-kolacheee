@@ -9,7 +9,7 @@ import { useCreateCharacter } from "../hooks/use-characters";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { Sparkles, Loader2, Wand2, CheckCircle, AlertCircle, ChevronDown, User, Save } from "lucide-react";
 import { ProfessorMariWorkingWindow } from "../../../shared/components/ui/ProfessorMariWorkingWindow";
-import { generateCharacterMaker } from "../../../engine/generation";
+import { generateCharacterMaker } from "../../../engine/generation/makers";
 import { llmApi } from "../../../shared/api/llm-api";
 
 interface Props {

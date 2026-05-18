@@ -3,18 +3,15 @@
 // ──────────────────────────────────────────────
 import { api } from "../api/api-client";
 import { chatBackgroundMetadataToUrl } from "./backgrounds";
-import { planRoleplayScene, createRoleplayScene } from "../../engine/modes/roleplay/scene";
+import { planRoleplayScene, createRoleplayScene } from "../../engine/modes/roleplay/scene/scene-service";
 import { llmApi } from "../api/llm-api";
 import { storageApi } from "../api/storage-api";
 import { useChatStore } from "../stores/chat.store";
 import { useUIStore } from "../stores/ui.store";
 import { toast } from "sonner";
-import {
-  SUPPORTED_MACROS,
-  buildNarratorInstructionMessage,
-  type SceneCreateResponse,
-  type ScenePlanResponse,
-} from "@marinara-engine/shared";
+import type { SceneCreateResponse, ScenePlanResponse } from "../../engine/contracts/types/scene";
+import { SUPPORTED_MACROS } from "../../engine/shared/macros/macro-engine";
+import { buildNarratorInstructionMessage } from "../../engine/shared/text/generation-guide";
 
 export interface SlashCommand {
   name: string;

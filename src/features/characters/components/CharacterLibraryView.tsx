@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowUpDown, Download, MessageCircle, Pencil, Plus, Search, Sparkles, Star, User } from "lucide-react";
 import { useCharacters } from "../hooks/use-characters";
 import { useStartChatFromCharacter } from "../hooks/use-start-chat-from-character";
-import { getCharacterTitle } from "../lib/character-display";
+import { getCharacterTitle } from "../../../shared/lib/character-display";
 import { cn, getAvatarCropStyle, type AvatarCrop } from "../../../shared/lib/utils";
 import { useUIStore } from "../../../shared/stores/ui.store";
 

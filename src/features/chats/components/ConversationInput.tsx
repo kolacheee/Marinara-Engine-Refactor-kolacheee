@@ -38,7 +38,7 @@ import {
 import { createInputMacroResolverForChat, isPromptPreviewMacro } from "../../../shared/lib/chat-macros";
 import { parseChatMetadata } from "../../../shared/lib/chat-display";
 import { cn, getAvatarCropStyle, type AvatarCropValue } from "../../../shared/lib/utils";
-import { fetchUrlBlob } from "../../../shared/lib/url-blob";
+import { loadUrlBlob } from "../../../shared/lib/url-blob";
 import { translateDraftText } from "../../../shared/lib/draft-translation";
 import { QuickConnectionSwitcher } from "./QuickConnectionSwitcher";
 import { QuickPersonaSwitcher } from "./QuickPersonaSwitcher";
@@ -50,7 +50,8 @@ import { MariThinkingIndicator } from "./MariThinkingIndicator";
 import { MariCapabilityNotice } from "./MariCapabilityNotice";
 import { SlashCommandFeedback } from "./SlashCommandFeedback";
 import { QuickReplyMenu, type QuickReplyAction } from "./QuickReplyMenu";
-import { buildGuidedGenerationInstructionMessage, type Message } from "@marinara-engine/shared";
+import type { Message } from "../../../engine/contracts/types/chat";
+import { buildGuidedGenerationInstructionMessage } from "../../../engine/shared/text/generation-guide";
 
 interface Attachment {
   type: string;
@@ -1261,7 +1262,7 @@ export function ConversationInput({
       // Fetch the GIF and convert to PNG so all providers can handle it
       let gifAttachments: Array<{ type: string; data: string }> | undefined;
       try {
-        const blob = await fetchUrlBlob(gifUrl);
+        const blob = await loadUrlBlob(gifUrl);
         const { dataUrl } = await convertToPng(blob);
         gifAttachments = [{ type: "image/png", data: dataUrl }];
       } catch {

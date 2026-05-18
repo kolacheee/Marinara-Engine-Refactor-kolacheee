@@ -6,8 +6,7 @@ pub(crate) fn custom_tool_capabilities() -> Value {
     json!({
         "staticResults": true,
         "webhooks": true,
-        "scriptExecutionEnabled": false,
-        "scriptDisabledReason": "Script custom tools are not enabled in the native Tauri runtime."
+        "scriptExecutionEnabled": false
     })
 }
 
@@ -33,12 +32,13 @@ pub(crate) async fn execute_custom_tool(state: &AppState, body: Value) -> AppRes
     {
         "static" => Ok(json!({
             "success": true,
-            "result": tool.get("staticResult").and_then(Value::as_str).unwrap_or("")
+            "result": tool
+                .get("staticResult")
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| AppError::invalid_input(format!("Static result is missing for custom tool: {tool_name}")))?
         })),
         "webhook" => execute_webhook_tool(&tool, tool_name, arguments).await,
-        "script" => Err(AppError::invalid_input(
-            "Script custom tools are disabled in the native Tauri runtime",
-        )),
         other => Err(AppError::invalid_input(format!(
             "Unsupported custom tool execution type: {other}"
         ))),

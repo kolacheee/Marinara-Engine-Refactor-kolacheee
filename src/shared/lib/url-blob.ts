@@ -1,77 +1,64 @@
-function forEachHeader(headers: HeadersInit | undefined, visit: (key: string, value: string) => void): void {
-  if (!headers) return;
-  if (headers instanceof Headers) {
-    headers.forEach((value, key) => visit(key, value));
-    return;
+import { invoke } from "@tauri-apps/api/core";
+
+type BinaryLoadResponse = {
+  base64?: string;
+  mimeType?: string;
+};
+
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
   }
-  if (Array.isArray(headers)) {
-    for (const [key, value] of headers) visit(key, value);
-    return;
-  }
-  for (const [key, value] of Object.entries(headers)) visit(key, value);
+  return bytes;
 }
 
-function requestUrl<T extends Blob | ArrayBuffer>(
-  url: string,
-  responseType: "blob" | "arraybuffer",
-  options: { init?: RequestInit; errorMessage?: string } = {},
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open(options.init?.method ?? "GET", url, true);
-    xhr.responseType = responseType;
+function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
 
-    forEachHeader(options.init?.headers, (key, value) => {
-      try {
-        xhr.setRequestHeader(key, value);
-      } catch {
-        // Some browser-managed headers cannot be set manually.
-      }
-    });
+function dataUrlToBlob(url: string, fallbackMimeType = "application/octet-stream"): Blob {
+  const [header, data = ""] = url.split(",", 2);
+  const mimeType = header.match(/^data:([^;]+)/)?.[1] ?? fallbackMimeType;
+  return new Blob([bytesToArrayBuffer(base64ToBytes(data))], { type: mimeType });
+}
 
-    const abort = () => {
-      xhr.abort();
-      reject(new DOMException("The request was aborted.", "AbortError"));
-    };
-    if (options.init?.signal?.aborted) {
-      abort();
-      return;
-    }
-    options.init?.signal?.addEventListener("abort", abort, { once: true });
+function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+  return blob.arrayBuffer();
+}
 
-    xhr.onload = () => {
-      options.init?.signal?.removeEventListener("abort", abort);
-      const ok = (xhr.status >= 200 && xhr.status < 300) || (xhr.status === 0 && xhr.response);
-      if (!ok) {
-        reject(new Error(options.errorMessage ?? `Failed to load ${url}`));
-        return;
-      }
-      resolve(xhr.response as T);
-    };
-    xhr.onerror = () => {
-      options.init?.signal?.removeEventListener("abort", abort);
-      reject(new Error(options.errorMessage ?? `Failed to load ${url}`));
-    };
-    xhr.onabort = () => {
-      options.init?.signal?.removeEventListener("abort", abort);
-      reject(new DOMException("The request was aborted.", "AbortError"));
-    };
-    xhr.send((options.init?.body as XMLHttpRequestBodyInit | Document | null | undefined) ?? null);
+async function loadRemoteBlob(url: string, fallbackMimeType: string): Promise<Blob> {
+  const response = await invoke<BinaryLoadResponse>("load_url_binary", {
+    url,
+    fallbackMime: fallbackMimeType,
   });
+  const base64 = response.base64 ?? "";
+  return new Blob([bytesToArrayBuffer(base64ToBytes(base64))], { type: response.mimeType ?? fallbackMimeType });
 }
 
-export async function fetchUrlBlob(
+export async function loadUrlBlob(
   url: string,
   options: { init?: RequestInit; errorMessage?: string } = {},
 ): Promise<Blob> {
-  return requestUrl<Blob>(url, "blob", options);
+  if (options.init?.method && options.init.method.toUpperCase() !== "GET") {
+    throw new Error(options.errorMessage ?? "Only GET binary loading is supported.");
+  }
+  if (url.startsWith("data:")) return dataUrlToBlob(url);
+  try {
+    return await loadRemoteBlob(url, "application/octet-stream");
+  } catch (error) {
+    throw new Error(options.errorMessage ?? (error instanceof Error ? error.message : `Failed to load ${url}`));
+  }
 }
 
-export async function fetchUrlArrayBuffer(
+export async function loadUrlArrayBuffer(
   url: string,
   options: { init?: RequestInit; errorMessage?: string } = {},
 ): Promise<ArrayBuffer> {
-  return requestUrl<ArrayBuffer>(url, "arraybuffer", options);
+  return blobToArrayBuffer(await loadUrlBlob(url, options));
 }
 
 export async function blobToDataUrl(blob: Blob, errorMessage = "Failed to convert file."): Promise<string> {
@@ -88,7 +75,7 @@ export async function blobToDataUrl(blob: Blob, errorMessage = "Failed to conver
 
 export async function urlToDataUrl(url: string, errorMessage = "Failed to read file."): Promise<string> {
   if (url.startsWith("data:")) return url;
-  return blobToDataUrl(await fetchUrlBlob(url, { errorMessage }), errorMessage);
+  return blobToDataUrl(await loadUrlBlob(url, { errorMessage }), errorMessage);
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {

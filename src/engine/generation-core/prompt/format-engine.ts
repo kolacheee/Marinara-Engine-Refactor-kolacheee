@@ -1,8 +1,5 @@
-// ──────────────────────────────────────────────
-// Format Engine — XML / Markdown auto-wrapping
-// ──────────────────────────────────────────────
-import type { WrapFormat } from "@marinara-engine/shared";
-import { nameToXmlTag } from "@marinara-engine/shared";
+import type { WrapFormat } from "../../contracts/types/prompt";
+import { nameToXmlTag } from "../../shared/text/xml-wrapper";
 
 /**
  * Convert a display name to a Markdown heading slug.

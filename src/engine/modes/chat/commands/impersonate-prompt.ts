@@ -1,4 +1,4 @@
-import { DEFAULT_IMPERSONATE_PROMPT } from "@marinara-engine/shared";
+import { DEFAULT_IMPERSONATE_PROMPT } from "../../../contracts/constants/impersonate";
 
 interface BuildImpersonateInstructionArgs {
   customPrompt?: unknown;
@@ -7,17 +7,8 @@ interface BuildImpersonateInstructionArgs {
   personaDescription?: string | null;
 }
 
-const LEGACY_IMPERSONATION_DIRECTION_RE =
-  /^\[Impersonation instruction (?:\u2014|-) write \{\{user\}\}'s next response, steering it toward the following:\s*([\s\S]+?)\]$/;
-
 function normalizeText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizeDirection(direction: string | null | undefined): string {
-  const rawDirection = normalizeText(direction);
-  const legacyDirectionMatch = rawDirection.match(LEGACY_IMPERSONATION_DIRECTION_RE);
-  return legacyDirectionMatch ? legacyDirectionMatch[1]!.trim() : rawDirection;
 }
 
 function punctuateDirection(direction: string): string {
@@ -69,7 +60,7 @@ export function buildImpersonateInstruction({
   personaDescription,
 }: BuildImpersonateInstructionArgs): string {
   const normalizedCustomPrompt = normalizeText(customPrompt);
-  const impersonationDirection = normalizeDirection(direction);
+  const impersonationDirection = normalizeText(direction);
   const personaLabel = normalizeText(personaName) || "{{user}}";
   const description = normalizeText(personaDescription);
 

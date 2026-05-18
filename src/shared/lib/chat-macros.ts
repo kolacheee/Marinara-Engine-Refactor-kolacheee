@@ -1,4 +1,4 @@
-import { resolveMacros, type MacroContext } from "@marinara-engine/shared";
+import { resolveMacros, type MacroContext } from "../../engine/shared/macros/macro-engine";
 
 export interface MacroCharacterData {
   id?: string;

@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../shared/api/api-client";
-import type { ConnectionFolder } from "@marinara-engine/shared";
+import type { ConnectionFolder } from "../../../engine/contracts/types/connection";
 import { connectionKeys } from "./use-connections";
 
 export const connectionFolderKeys = {
