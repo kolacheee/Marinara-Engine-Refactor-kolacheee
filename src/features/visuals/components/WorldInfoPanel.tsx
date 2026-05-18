@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, Globe, Loader2, PenLine, X } from "lucide-react";
-import { useUpdateChatMetadata } from "../../chats/hooks/use-chats";
+import { useState } from "react";
+import { AlertTriangle, ChevronDown, ChevronRight, Globe, Loader2, X } from "lucide-react";
 import { type BudgetSkippedLorebookEntry, useActiveLorebookEntries } from "../../lorebooks/hooks/use-lorebooks";
 
 function WorldInfoEntryRow({
@@ -92,19 +91,15 @@ function BudgetSkippedEntriesNotice({ entries }: { entries: BudgetSkippedLoreboo
 
   return (
     <div className="mb-2 rounded-lg border border-amber-500/25 bg-amber-500/10 p-2 text-xs text-amber-50/85">
-      <button
-        type="button"
-        className="flex w-full items-start gap-2 text-left"
-        onClick={() => setExpanded((prev) => !prev)}
-      >
+      <button type="button" className="flex w-full items-start gap-2 text-left" onClick={() => setExpanded((prev) => !prev)}>
         <AlertTriangle size="0.875rem" className="mt-0.5 shrink-0 text-amber-300" />
         <span className="min-w-0 flex-1">
           <span className="block font-medium text-amber-100">
             {entries.length} matching lore {entries.length === 1 ? "entry was" : "entries were"} skipped by token budget
           </span>
           <span className="mt-0.5 block text-[0.625rem] leading-relaxed text-amber-50/65">
-            Expand for budget details. Knowledge Retrieval or Knowledge Router may fit large lorebooks better than
-            simply raising caps.
+            Expand for budget details. Knowledge Retrieval or Knowledge Router may fit large lorebooks better than simply
+            raising caps.
           </span>
         </span>
         {expanded ? <ChevronDown size="0.75rem" /> : <ChevronRight size="0.75rem" />}
@@ -160,7 +155,7 @@ export function WorldInfoPanel({
       ) : (
         <>
           <p className="mb-2 text-[0.625rem] text-[var(--muted-foreground)]">
-            {entries.length} active • ~{(data?.totalTokens ?? 0).toLocaleString()} tokens
+            {entries.length} active * ~{(data?.totalTokens ?? 0).toLocaleString()} tokens
           </p>
           <BudgetSkippedEntriesNotice entries={skippedEntries} />
           <div className="space-y-1.5">
@@ -170,106 +165,6 @@ export function WorldInfoPanel({
           </div>
         </>
       )}
-    </>
-  );
-}
-
-export function AuthorNotesPanel({
-  chatId,
-  chatMeta,
-  isMobile,
-  onClose,
-}: {
-  chatId: string;
-  chatMeta: Record<string, any>;
-  isMobile: boolean;
-  onClose: () => void;
-}) {
-  const [notes, setNotes] = useState((chatMeta.authorNotes as string) ?? "");
-  const [depthStr, setDepthStr] = useState(String((chatMeta.authorNotesDepth as number) ?? 4));
-  const updateMeta = useUpdateChatMetadata();
-
-  const latestRef = useRef({ notes, depthStr });
-  latestRef.current = { notes, depthStr };
-  const baselineRef = useRef({
-    notes: (chatMeta.authorNotes as string) ?? "",
-    depth: (chatMeta.authorNotesDepth as number) ?? 4,
-  });
-  const mutateRef = useRef(updateMeta.mutate);
-  mutateRef.current = updateMeta.mutate;
-
-  useEffect(() => {
-    setNotes((chatMeta.authorNotes as string) ?? "");
-    setDepthStr(String((chatMeta.authorNotesDepth as number) ?? 4));
-    baselineRef.current = {
-      notes: (chatMeta.authorNotes as string) ?? "",
-      depth: (chatMeta.authorNotesDepth as number) ?? 4,
-    };
-  }, [chatMeta.authorNotes, chatMeta.authorNotesDepth]);
-
-  // Outside-click closes the popover via mousedown, which unmounts the
-  // textarea before its onBlur (the only save trigger) can fire. Flush
-  // the pending edit from the unmount cleanup so typed content survives.
-  useEffect(() => {
-    const capturedChatId = chatId;
-    return () => {
-      const { notes: n, depthStr: d } = latestRef.current;
-      const nextDepth = Math.max(0, parseInt(d, 10) || 0);
-      const base = baselineRef.current;
-      if (n !== base.notes || nextDepth !== base.depth) {
-        mutateRef.current({ id: capturedChatId, authorNotes: n, authorNotesDepth: nextDepth });
-      }
-    };
-  }, [chatId]);
-
-  const depth = parseInt(depthStr, 10) || 0;
-  const handleSave = () => {
-    updateMeta.mutate({ id: chatId, authorNotes: notes, authorNotesDepth: depth });
-  };
-
-  return (
-    <>
-      <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-[var(--foreground)]">
-        <PenLine size="0.75rem" />
-        Author's Notes
-        {isMobile && (
-          <button
-            onClick={onClose}
-            className="ml-auto rounded-md p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-          >
-            <X size="0.75rem" />
-          </button>
-        )}
-      </h3>
-      <p className="mb-2 text-[0.625rem] text-[var(--muted-foreground)]">
-        Text here is injected into the prompt at the chosen depth every generation.
-      </p>
-      <textarea
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        onBlur={handleSave}
-        placeholder="e.g. Keep the tone dark and suspenseful. The villain is secretly an ally."
-        className="w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-2.5 py-2 text-xs text-[var(--foreground)] outline-none transition-colors placeholder:text-[var(--muted-foreground)] focus:ring-2 focus:ring-[var(--ring)]"
-        rows={4}
-      />
-      <div className="mt-2 flex items-center gap-2">
-        <span className="shrink-0 text-[0.625rem] text-[var(--muted-foreground)]">Injection Depth</span>
-        <input
-          type="text"
-          inputMode="numeric"
-          value={depthStr}
-          onChange={(e) => setDepthStr(e.target.value.replace(/[^0-9]/g, ""))}
-          onBlur={() => {
-            const nextDepth = Math.max(0, parseInt(depthStr, 10) || 0);
-            setDepthStr(String(nextDepth));
-            updateMeta.mutate({ id: chatId, authorNotes: notes, authorNotesDepth: nextDepth });
-          }}
-          className="w-14 rounded-md border border-[var(--border)] bg-[var(--secondary)] px-2 py-0.5 text-center text-[0.625rem] text-[var(--foreground)] outline-none transition-colors [appearance:textfield] focus:ring-2 focus:ring-[var(--ring)] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-        />
-      </div>
-      <p className="mt-1 text-[0.5625rem] text-[var(--muted-foreground)]/60">
-        Depth 0 = end of conversation, 4 = four messages from the end.
-      </p>
     </>
   );
 }

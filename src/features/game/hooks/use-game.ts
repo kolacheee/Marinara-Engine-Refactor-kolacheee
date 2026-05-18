@@ -12,7 +12,7 @@ import {
   getPendingHudWidgetPersistenceSignature,
   useGameModeStore,
 } from "../stores/game-mode.store";
-import { useGameStateStore } from "../../game/stores/game-state.store";
+import { useGameStateStore } from "../../world-state/stores/world-state.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import type {

@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo, memo } from "react";
 import { useCharacterSprites, type SpriteInfo } from "../../characters/hooks/use-characters";
 import { detectExpression } from "./SpriteOverlay";
 import { cn } from "../../../shared/lib/utils";
-import type { CharacterMap } from "./ChatArea";
+import type { CharacterMap } from "../../chats/components/chat-area.types";
 
 interface SpriteSidebarProps {
   /** IDs of characters with sprites enabled */

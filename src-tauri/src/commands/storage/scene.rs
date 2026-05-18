@@ -1,12 +1,20 @@
-use super::*;
 use super::shared::*;
+use super::*;
 
 use super::chats::{chat_messages, delete_chat_with_messages, messages_for_chat};
 use super::generation::resolve_generation_connection;
 use super::llm::{llm_connection_from_value, resolve_llm_connection_for_request};
 
-pub(crate) fn patch_metadata_map(state: &AppState, chat_id: &str, metadata: Map<String, Value>) -> AppResult<Value> {
-    state.storage.patch("chats", chat_id, json!({ "metadata": Value::Object(metadata) }))
+pub(crate) fn patch_metadata_map(
+    state: &AppState,
+    chat_id: &str,
+    metadata: Map<String, Value>,
+) -> AppResult<Value> {
+    state.storage.patch(
+        "chats",
+        chat_id,
+        json!({ "metadata": Value::Object(metadata) }),
+    )
 }
 
 pub(crate) fn clean_scene_pointers(metadata: &mut Map<String, Value>) {
@@ -23,7 +31,11 @@ pub(crate) fn safe_title(value: &str, fallback: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
-    let title = if title.is_empty() { fallback.trim() } else { &title };
+    let title = if title.is_empty() {
+        fallback.trim()
+    } else {
+        &title
+    };
     let clipped: String = title.chars().take(60).collect();
     if clipped.starts_with("Scene:") {
         clipped
@@ -32,7 +44,11 @@ pub(crate) fn safe_title(value: &str, fallback: &str) -> String {
     }
 }
 
-pub(crate) fn fallback_scene_plan(state: &AppState, chat_id: &str, prompt: &str) -> AppResult<Value> {
+pub(crate) fn fallback_scene_plan(
+    state: &AppState,
+    chat_id: &str,
+    prompt: &str,
+) -> AppResult<Value> {
     let chat = get_required(state, "chats", chat_id)?;
     let character_ids = string_array_from_value(chat.get("characterIds"));
     let history = messages_for_chat(state, chat_id)?
@@ -43,8 +59,15 @@ pub(crate) fn fallback_scene_plan(state: &AppState, chat_id: &str, prompt: &str)
         .into_iter()
         .rev()
         .filter_map(|message| {
-            let role = message.get("role").and_then(Value::as_str).unwrap_or("user");
-            let content = message.get("content").and_then(Value::as_str).unwrap_or("").trim();
+            let role = message
+                .get("role")
+                .and_then(Value::as_str)
+                .unwrap_or("user");
+            let content = message
+                .get("content")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim();
             (!content.is_empty()).then(|| format!("{role}: {content}"))
         })
         .collect::<Vec<_>>()
@@ -77,7 +100,10 @@ pub(crate) fn fallback_scene_plan(state: &AppState, chat_id: &str, prompt: &str)
 }
 
 pub(crate) fn parse_json_object_from_text(raw: &str) -> Option<Value> {
-    let cleaned = raw.replace("```json", "").replace("```JSON", "").replace("```", "");
+    let cleaned = raw
+        .replace("```json", "")
+        .replace("```JSON", "")
+        .replace("```", "");
     let first = cleaned.find('{')?;
     let last = cleaned.rfind('}')?;
     serde_json::from_str::<Value>(&cleaned[first..=last]).ok()
@@ -92,13 +118,23 @@ pub(crate) fn plan_field_string(parsed: &Value, key: &str, fallback: &Value) -> 
         .to_string()
 }
 
-pub(crate) fn sanitize_scene_plan(parsed: &Value, fallback: &Value, allowed_character_ids: &[String]) -> Value {
+pub(crate) fn sanitize_scene_plan(
+    parsed: &Value,
+    fallback: &Value,
+    allowed_character_ids: &[String],
+) -> Value {
     let mut plan = ensure_object(fallback.clone()).unwrap_or_default();
-    let fallback_name = fallback.get("name").and_then(Value::as_str).unwrap_or("Scene");
+    let fallback_name = fallback
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("Scene");
     plan.insert(
         "name".to_string(),
         Value::String(safe_title(
-            parsed.get("name").and_then(Value::as_str).unwrap_or(fallback_name),
+            parsed
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(fallback_name),
             "New Scene",
         )),
     );
@@ -137,18 +173,24 @@ pub(crate) fn sanitize_scene_plan(parsed: &Value, fallback: &Value, allowed_char
     plan.insert("characterIds".to_string(), json!(character_ids));
     plan.insert(
         "rating".to_string(),
-        Value::String(if parsed.get("rating").and_then(Value::as_str) == Some("nsfw") {
-            "nsfw".to_string()
-        } else {
-            "sfw".to_string()
-        }),
+        Value::String(
+            if parsed.get("rating").and_then(Value::as_str) == Some("nsfw") {
+                "nsfw".to_string()
+            } else {
+                "sfw".to_string()
+            },
+        ),
     );
     Value::Object(plan)
 }
 
 pub(crate) async fn scene_plan(state: &AppState, body: Value) -> AppResult<Value> {
     let chat_id = required_string(&body, "chatId")?;
-    let prompt = body.get("prompt").and_then(Value::as_str).unwrap_or("").trim();
+    let prompt = body
+        .get("prompt")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
     let fallback = fallback_scene_plan(state, chat_id, prompt)?;
     let chat = get_required(state, "chats", chat_id)?;
     let allowed_character_ids = string_array_from_value(chat.get("characterIds"));
@@ -171,8 +213,15 @@ pub(crate) async fn scene_plan(state: &AppState, body: Value) -> AppResult<Value
         .into_iter()
         .rev()
         .filter_map(|message| {
-            let role = message.get("role").and_then(Value::as_str).unwrap_or("user");
-            let content = message.get("content").and_then(Value::as_str).unwrap_or("").trim();
+            let role = message
+                .get("role")
+                .and_then(Value::as_str)
+                .unwrap_or("user");
+            let content = message
+                .get("content")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim();
             (!content.is_empty()).then(|| format!("{role}: {content}"))
         })
         .collect::<Vec<_>>()
@@ -211,7 +260,9 @@ pub(crate) async fn scene_plan(state: &AppState, body: Value) -> AppResult<Value
     match marinara_llm::complete(request).await {
         Ok(raw) => {
             if let Some(parsed) = parse_json_object_from_text(&raw) {
-                Ok(json!({ "plan": sanitize_scene_plan(&parsed, &fallback, &allowed_character_ids) }))
+                Ok(
+                    json!({ "plan": sanitize_scene_plan(&parsed, &fallback, &allowed_character_ids) }),
+                )
             } else {
                 Ok(json!({
                     "plan": fallback,
@@ -260,7 +311,12 @@ pub(crate) fn scene_create(state: &AppState, body: Value) -> AppResult<Value> {
         .and_then(Value::as_str)
         .filter(|id| !id.is_empty())
         .map(ToOwned::to_owned)
-        .or_else(|| origin_chat.get("connectionId").and_then(Value::as_str).map(ToOwned::to_owned));
+        .or_else(|| {
+            origin_chat
+                .get("connectionId")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        });
     let mut metadata = Map::new();
     metadata.insert(
         "sceneOriginChatId".to_string(),
@@ -270,7 +326,10 @@ pub(crate) fn scene_create(state: &AppState, body: Value) -> AppResult<Value> {
         "sceneInitiatorCharId".to_string(),
         body.get("initiatorCharId").cloned().unwrap_or(Value::Null),
     );
-    metadata.insert("sceneDescription".to_string(), Value::String(description.clone()));
+    metadata.insert(
+        "sceneDescription".to_string(),
+        Value::String(description.clone()),
+    );
     metadata.insert(
         "sceneScenario".to_string(),
         plan.get("scenario").cloned().unwrap_or(Value::Null),
@@ -285,7 +344,9 @@ pub(crate) fn scene_create(state: &AppState, body: Value) -> AppResult<Value> {
     );
     metadata.insert(
         "sceneRelationshipHistory".to_string(),
-        plan.get("relationshipHistory").cloned().unwrap_or(Value::Null),
+        plan.get("relationshipHistory")
+            .cloned()
+            .unwrap_or(Value::Null),
     );
     metadata.insert(
         "sceneRating".to_string(),
@@ -296,10 +357,16 @@ pub(crate) fn scene_create(state: &AppState, body: Value) -> AppResult<Value> {
                 .to_string(),
         ),
     );
-    metadata.insert("sceneStatus".to_string(), Value::String("active".to_string()));
+    metadata.insert(
+        "sceneStatus".to_string(),
+        Value::String("active".to_string()),
+    );
     metadata.insert("enableMemoryRecall".to_string(), Value::Bool(true));
     if let Some(background) = plan.get("background").and_then(Value::as_str) {
-        metadata.insert("background".to_string(), Value::String(background.to_string()));
+        metadata.insert(
+            "background".to_string(),
+            Value::String(background.to_string()),
+        );
     }
 
     let scene_chat = state.storage.create(
@@ -331,9 +398,11 @@ pub(crate) fn scene_create(state: &AppState, body: Value) -> AppResult<Value> {
         json!(string_array_from_value(scene_chat.get("characterIds"))),
     );
     patch_metadata_map(state, origin_chat_id, origin_meta)?;
-    state
-        .storage
-        .patch("chats", origin_chat_id, json!({ "connectedChatId": scene_chat_id }))?;
+    state.storage.patch(
+        "chats",
+        origin_chat_id,
+        json!({ "connectedChatId": scene_chat_id }),
+    )?;
 
     if let Some(guide) = plan
         .get("participationGuide")
@@ -352,7 +421,11 @@ pub(crate) fn scene_create(state: &AppState, body: Value) -> AppResult<Value> {
         .get("initiatorCharId")
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
-        .or_else(|| string_array_from_value(scene_chat.get("characterIds")).into_iter().next());
+        .or_else(|| {
+            string_array_from_value(scene_chat.get("characterIds"))
+                .into_iter()
+                .next()
+        });
     let opening_content = [description.as_str(), "", first_message.as_str()].join("\n");
     chat_messages(
         state,
@@ -374,13 +447,24 @@ pub(crate) fn scene_create(state: &AppState, body: Value) -> AppResult<Value> {
     }))
 }
 
-pub(crate) async fn summarize_scene(state: &AppState, scene_chat_id: &str, body: &Value) -> AppResult<String> {
+pub(crate) async fn summarize_scene(
+    state: &AppState,
+    scene_chat_id: &str,
+    body: &Value,
+) -> AppResult<String> {
     let messages = messages_for_chat(state, scene_chat_id)?;
     let transcript = messages
         .iter()
         .filter_map(|message| {
-            let role = message.get("role").and_then(Value::as_str).unwrap_or("user");
-            let content = message.get("content").and_then(Value::as_str).unwrap_or("").trim();
+            let role = message
+                .get("role")
+                .and_then(Value::as_str)
+                .unwrap_or("user");
+            let content = message
+                .get("content")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim();
             (!content.is_empty()).then(|| format!("{role}: {content}"))
         })
         .collect::<Vec<_>>()
@@ -433,19 +517,26 @@ pub(crate) async fn scene_conclude(state: &AppState, body: Value) -> AppResult<V
         json!({ "role": "narrator", "content": format!("The scene concluded.\n\n{summary}") }),
         &HashMap::new(),
     )?;
-    scene_meta.insert("sceneStatus".to_string(), Value::String("concluded".to_string()));
+    scene_meta.insert(
+        "sceneStatus".to_string(),
+        Value::String("concluded".to_string()),
+    );
     patch_metadata_map(state, scene_chat_id, scene_meta)?;
     if let Ok(origin_chat) = get_required(state, "chats", &origin_chat_id) {
         let mut origin_meta = metadata_map(&origin_chat);
         clean_scene_pointers(&mut origin_meta);
         patch_metadata_map(state, &origin_chat_id, origin_meta)?;
-        state
-            .storage
-            .patch("chats", &origin_chat_id, json!({ "connectedChatId": Value::Null }))?;
+        state.storage.patch(
+            "chats",
+            &origin_chat_id,
+            json!({ "connectedChatId": Value::Null }),
+        )?;
     }
-    state
-        .storage
-        .patch("chats", scene_chat_id, json!({ "connectedChatId": Value::Null }))?;
+    state.storage.patch(
+        "chats",
+        scene_chat_id,
+        json!({ "connectedChatId": Value::Null }),
+    )?;
     Ok(json!({ "summary": summary, "originChatId": origin_chat_id }))
 }
 
@@ -462,9 +553,11 @@ pub(crate) fn scene_abandon(state: &AppState, body: Value) -> AppResult<Value> {
         let mut origin_meta = metadata_map(&origin_chat);
         clean_scene_pointers(&mut origin_meta);
         patch_metadata_map(state, &origin_chat_id, origin_meta)?;
-        state
-            .storage
-            .patch("chats", &origin_chat_id, json!({ "connectedChatId": Value::Null }))?;
+        state.storage.patch(
+            "chats",
+            &origin_chat_id,
+            json!({ "connectedChatId": Value::Null }),
+        )?;
     }
     delete_chat_with_messages(state, scene_chat_id)?;
     Ok(json!({ "originChatId": origin_chat_id }))
@@ -504,7 +597,10 @@ pub(crate) fn scene_fork(state: &AppState, body: Value) -> AppResult<Value> {
         .get("sceneOriginChatId")
         .and_then(Value::as_str)
         .map(ToOwned::to_owned);
-    let base_name = scene_chat.get("name").and_then(Value::as_str).unwrap_or("Scene");
+    let base_name = scene_chat
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("Scene");
     let fork_chat = state.storage.create(
         "chats",
         json!({
@@ -531,7 +627,10 @@ pub(crate) fn scene_fork(state: &AppState, body: Value) -> AppResult<Value> {
     let mut skipped_guide = false;
     for mut message in messages_for_chat(state, scene_chat_id)? {
         let stop = up_to.is_some_and(|id| message.get("id").and_then(Value::as_str) == Some(id));
-        if !include_guide && !skipped_guide && message.get("role").and_then(Value::as_str) == Some("narrator") {
+        if !include_guide
+            && !skipped_guide
+            && message.get("role").and_then(Value::as_str) == Some("narrator")
+        {
             skipped_guide = true;
             if stop {
                 break;
@@ -553,9 +652,11 @@ pub(crate) fn scene_fork(state: &AppState, body: Value) -> AppResult<Value> {
                 let mut origin_meta = metadata_map(&origin_chat);
                 clean_scene_pointers(&mut origin_meta);
                 patch_metadata_map(state, origin_id, origin_meta)?;
-                state
-                    .storage
-                    .patch("chats", origin_id, json!({ "connectedChatId": Value::Null }))?;
+                state.storage.patch(
+                    "chats",
+                    origin_id,
+                    json!({ "connectedChatId": Value::Null }),
+                )?;
             }
         }
         delete_chat_with_messages(state, scene_chat_id)?;

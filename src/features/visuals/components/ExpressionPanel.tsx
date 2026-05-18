@@ -10,7 +10,7 @@ import { useCharacterSprites, type SpriteInfo } from "../../characters/hooks/use
 import { detectExpression } from "./SpriteOverlay";
 import { cn, getAvatarCropStyle } from "../../../shared/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { CharacterMap } from "./ChatArea";
+import type { CharacterMap } from "../../chats/components/chat-area.types";
 
 interface ExpressionPanelProps {
   /** Character IDs in this chat */

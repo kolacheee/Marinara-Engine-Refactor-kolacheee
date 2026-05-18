@@ -2,6 +2,8 @@
 // React Query: Preset, Group, Section & Choice hooks
 // ──────────────────────────────────────────────
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { previewGenerationPrompt } from "../../../engine/generation";
+import { storageApi } from "../../../shared/api/storage-api";
 import { api } from "../../../shared/lib/api-client";
 import type {
   PromptPreset,
@@ -356,10 +358,10 @@ export function usePreviewPreset() {
       chatId: string;
       choices?: Record<string, string>;
     }) =>
-      api.post<{
+      previewGenerationPrompt(storageApi, { presetId, chatId, choices }) as Promise<{
         messages: ChatMLMessage[];
         parameters: GenerationParameters;
         messageCount: number;
-      }>(`/prompts/${presetId}/preview`, { chatId, choices }),
+      }>,
   });
 }

@@ -4,9 +4,17 @@
 import { useCallback, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api } from "../../../shared/lib/api-client";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { chatKeys } from "../../chats/hooks/use-chats";
+import { llmApi } from "../../../shared/api/llm-api";
+import { storageApi } from "../../../shared/api/storage-api";
+import {
+  abandonRoleplayScene,
+  concludeRoleplayScene,
+  createRoleplayScene,
+  forkRoleplayScene,
+  planRoleplayScene,
+} from "../../../engine/modes/roleplay/scene";
 import type {
   SceneCreateRequest,
   SceneCreateResponse,
@@ -33,7 +41,7 @@ export function useScene() {
     async (prompt: string, connectionId?: string | null): Promise<ScenePlanResponse | null> => {
       if (!activeChatId) return null;
       try {
-        return await api.post<ScenePlanResponse>("/scene/plan", {
+        return await planRoleplayScene({ storage: storageApi, llm: llmApi }, {
           chatId: activeChatId,
           prompt,
           connectionId: connectionId ?? null,
@@ -56,7 +64,7 @@ export function useScene() {
     }): Promise<SceneCreateResponse | null> => {
       if (!activeChatId) return null;
       try {
-        const res = await api.post<SceneCreateResponse>("/scene/create", {
+        const res = await createRoleplayScene(storageApi, {
           originChatId: activeChatId,
           initiatorCharId: opts.initiatorCharId ?? null,
           plan: opts.plan,
@@ -86,7 +94,7 @@ export function useScene() {
       try {
         toast("Generating scene summary...", { icon: "✍️" });
 
-        const res = await api.post<SceneConcludeResponse>("/scene/conclude", {
+        const res = await concludeRoleplayScene({ storage: storageApi, llm: llmApi }, {
           sceneChatId,
           connectionId: connectionId ?? null,
         } satisfies SceneConcludeRequest);
@@ -112,7 +120,7 @@ export function useScene() {
   const abandonScene = useCallback(
     async (sceneChatId: string): Promise<void> => {
       try {
-        const res = await api.post<{ originChatId: string }>("/scene/abandon", { sceneChatId });
+        const res = await abandonRoleplayScene(storageApi, { sceneChatId });
 
         // Optimistically clear scene pointer from the cached origin chat
         // so the banner disappears immediately (invalidation refetches async).
@@ -155,7 +163,7 @@ export function useScene() {
       isForkingRef.current = true;
       setIsForking(true);
       try {
-        const res = await api.post<SceneForkResponse>("/scene/fork", {
+        const res = await forkRoleplayScene(storageApi, {
           sceneChatId,
           mode,
           upToMessageId: opts?.upToMessageId,

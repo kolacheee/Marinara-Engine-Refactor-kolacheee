@@ -45,11 +45,19 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 base64 = "0.22"
+buttplug = "10.0.2"
+buttplug_core = "10.0.2"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+pdf-extract = "0.10"
+png = "0.17"
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+rfd = "0.15"
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["sync", "time"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 marinara-core = { path = "crates/core" }
 marinara-security = { path = "crates/security" }

@@ -993,6 +993,7 @@ function AppearanceSettings() {
       toast.success(`Installed "${data.family}"`);
       setGoogleFontName("");
       queryClient.invalidateQueries({ queryKey: ["custom-fonts"] });
+      window.dispatchEvent(new Event("marinara-fonts-updated"));
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to download font");

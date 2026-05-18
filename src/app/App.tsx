@@ -4,6 +4,8 @@ import { AppShell } from "./shell/AppShell";
 import { ModalRenderer } from "./shell/ModalRenderer";
 import { CustomThemeInjector } from "./providers/CustomThemeInjector";
 import { AppDialogRenderer } from "../shared/components/ui/AppDialogRenderer";
+import { api } from "../shared/api/api-client";
+import { filePathToAssetUrl } from "../shared/api/local-file-api";
 import { useUIStore } from "../shared/stores/ui.store";
 import { installRangeSliderSync } from "./startup/range-slider-sync";
 
@@ -23,6 +25,16 @@ function toCssFontFamilyValue(family: string): string {
   const cleanFamily = stripFontFamilyQuotes(family);
   return `"${cleanFamily.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
+
+type CustomFontFace = {
+  filename: string;
+  family: string;
+  url?: string;
+  absolutePath?: string;
+  weight?: string;
+  style?: string;
+  unicodeRange?: string | null;
+};
 
 export function App() {
   const theme = useUIStore((s) => s.theme);
@@ -62,6 +74,42 @@ export function App() {
       document.documentElement.style.removeProperty("--font-user");
     }
   }, [fontFamily]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFonts = () => {
+      api
+      .get<CustomFontFace[]>("/fonts")
+      .then((fonts) => {
+        if (cancelled) return;
+        const css = fonts
+          .map((font) => {
+            const source = font.absolutePath ? filePathToAssetUrl(font.absolutePath) : font.url;
+            if (!source || !font.family) return "";
+            const unicodeRange = font.unicodeRange ? `  unicode-range: ${font.unicodeRange};\n` : "";
+            return `@font-face {\n  font-family: "${font.family.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}";\n  src: url("${source}") format("${font.filename.endsWith(".woff2") ? "woff2" : font.filename.endsWith(".woff") ? "woff" : font.filename.endsWith(".otf") ? "opentype" : "truetype"}");\n  font-weight: ${font.weight ?? "400"};\n  font-style: ${font.style ?? "normal"};\n  font-display: swap;\n${unicodeRange}}`;
+          })
+          .filter(Boolean)
+          .join("\n");
+        let style = document.getElementById("marinara-custom-fonts") as HTMLStyleElement | null;
+        if (!style) {
+          style = document.createElement("style");
+          style.id = "marinara-custom-fonts";
+          document.head.appendChild(style);
+        }
+        style.textContent = css;
+      })
+      .catch(() => {});
+    };
+
+    loadFonts();
+    window.addEventListener("marinara-fonts-updated", loadFonts);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("marinara-fonts-updated", loadFonts);
+    };
+  }, []);
 
   return (
     <>

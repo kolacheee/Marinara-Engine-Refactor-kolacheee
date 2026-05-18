@@ -470,20 +470,6 @@ const jannyProvider: ProviderConfig = {
     return `https://jannyai.com/characters/${raw?.id || card.id}_character-${slug}`;
   },
   search: async (p) => {
-    // Fetch a one-time search token from the server (token is scraped from JannyAI's
-    // public Astro bundle). The actual MeiliSearch POST runs from the BROWSER so that
-    // Cloudflare sees a real browser TLS fingerprint + the user's cf_clearance cookie.
-    const fetchToken = async (force = false): Promise<string> => {
-      const { token: t } = await botBrowserGet<{ token?: string }>(`janny/token${force ? "?force=1" : ""}`).catch(
-        () => {
-          throw new Error("Could not obtain JannyAI token");
-        },
-      );
-      if (!t) throw new Error("JannyAI token unavailable");
-      return t;
-    };
-    let token = await fetchToken();
-
     const sortMap: Record<string, string[]> = {
       newest: ["createdAtStamp:desc"],
       oldest: ["createdAtStamp:asc"],
@@ -530,42 +516,7 @@ const jannyProvider: ProviderConfig = {
         ],
       };
 
-      // NOTE: deliberately omitting credentials. JannyAI's MeiliSearch endpoint
-      // returns `Access-Control-Allow-Origin: *`, which the browser refuses to
-      // pair with `credentials: "include"` — that combination blocks the response
-      // entirely. cf_clearance won't ride along, but the upstream has historically
-      // let cross-origin requests with browser TLS + UA through anyway.
-      const doFetch = (authToken: string) =>
-        fetch("https://search.jannyai.com/multi-search", {
-          method: "POST",
-          headers: {
-            Accept: "*/*",
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authToken}`,
-            "x-meilisearch-client": "Meilisearch instant-meilisearch (v0.19.0) ; Meilisearch JavaScript (v0.41.0)",
-          },
-          body: JSON.stringify(body),
-        });
-      let res = await doFetch(token);
-      // If the cached token has been rotated upstream, MeiliSearch returns 401/403.
-      // Force a server-side re-scrape and retry once.
-      if (res.status === 401 || res.status === 403) {
-        try {
-          token = await fetchToken(true);
-          res = await doFetch(token);
-        } catch {
-          /* fall through to error handling below */
-        }
-      }
-      if (!res.ok) {
-        if (res.status === 403) {
-          throw new Error(
-            "JannyAI is blocking the request (Cloudflare). Visit https://jannyai.com once in this browser to clear the challenge, then retry.",
-          );
-        }
-        throw new Error(`JannyAI search error ${res.status}`);
-      }
-      const raw = await res.json();
+      const raw = await botBrowserPost<any>("janny/search", { payload: body });
       return raw?.results?.[0];
     };
 
@@ -627,75 +578,8 @@ const jannyProvider: ProviderConfig = {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
-    const pageUrl = `https://jannyai.com/characters/${charId}_character-${slug}`;
 
-    // Helper to decode Astro's [type, data] serialization
-    function decodeAstro(value: unknown): unknown {
-      if (!Array.isArray(value)) return value;
-      const [type, data] = value;
-      if (type === 0) {
-        if (typeof data === "object" && data !== null && !Array.isArray(data)) {
-          const decoded: Record<string, unknown> = {};
-          for (const [key, val] of Object.entries(data as Record<string, unknown>)) {
-            decoded[key] = decodeAstro(val);
-          }
-          return decoded;
-        }
-        return data;
-      } else if (type === 1) {
-        return (data as unknown[]).map((item: unknown) => decodeAstro(item));
-      }
-      return data;
-    }
-
-    // Helper to parse character from HTML
-    function parseCharFromHtml(html: string): Record<string, unknown> | null {
-      if (!html || html.includes("Just a moment") || html.includes("cf-challenge")) return null;
-      let astroMatch = html.match(/astro-island[^>]*component-export="CharacterButtons"[^>]*props="([^"]+)"/);
-      if (!astroMatch) astroMatch = html.match(/astro-island[^>]*props="([^"]*character[^"]*)"/);
-      if (!astroMatch?.[1]) return null;
-      try {
-        const decoded = astroMatch[1]
-          .replace(/&quot;/g, '"')
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&#39;/g, "'");
-        const propsJson = JSON.parse(decoded);
-        return decodeAstro(propsJson.character) as Record<string, unknown> | null;
-      } catch {
-        return null;
-      }
-    }
-
-    // Strategy 1: corsproxy.io from browser (preferred — bypasses Cloudflare via the
-    // user's browser TLS fingerprint + any cf_clearance cookie they have for jannyai.com)
-    try {
-      const proxyRes = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(pageUrl)}`, {
-        headers: { Accept: "text/html,application/xhtml+xml,*/*" },
-      });
-      if (proxyRes.ok) {
-        const html = await proxyRes.text();
-        const char = parseCharFromHtml(html);
-        if (char && (char.personality || char.firstMessage)) {
-          return {
-            description: (char.personality as string) || undefined,
-            scenario: (char.scenario as string) || undefined,
-            firstMessage: (char.firstMessage as string) || undefined,
-            exampleDialogs: (char.exampleDialogs as string) || undefined,
-            creatorNotes: char.description
-              ? typeof char.description === "string"
-                ? char.description.replace(/<[^>]*>/g, "").trim()
-                : undefined
-              : undefined,
-          };
-        }
-      }
-    } catch {
-      /* fall through */
-    }
-
-    // Strategy 2: server-side proxy (likely fails due to Cloudflare, but try anyway)
+    // Fetch through the Tauri backend so browser UI no longer calls provider APIs directly.
     try {
       const data = await botBrowserGet<any>(`janny/character/${charId}?slug=character-${slug}`).catch(() => null);
       if (data) {

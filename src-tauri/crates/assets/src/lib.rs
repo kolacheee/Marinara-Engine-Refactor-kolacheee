@@ -72,6 +72,32 @@ impl AssetService {
         }))
     }
 
+    pub fn set_folder_description(&self, path: &str, description: &str) -> AppResult<Value> {
+        let folder = self.absolute_path(path)?;
+        if !folder.exists() {
+            fs::create_dir_all(&folder)?;
+        }
+        if !folder.is_dir() {
+            return Err(AppError::invalid_input("Asset path is not a folder"));
+        }
+        let meta_path = folder.join("meta.json");
+        let mut meta = if meta_path.exists() {
+            fs::read_to_string(&meta_path)
+                .ok()
+                .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+                .and_then(|value| value.as_object().cloned())
+                .unwrap_or_default()
+        } else {
+            Map::new()
+        };
+        meta.insert(
+            "description".to_string(),
+            Value::String(description.to_string()),
+        );
+        fs::write(&meta_path, serde_json::to_vec_pretty(&Value::Object(meta))?)?;
+        Ok(json!({ "path": path, "description": description }))
+    }
+
     pub fn read_text(&self, path: &str) -> AppResult<String> {
         Ok(fs::read_to_string(self.absolute_path(path)?)?)
     }
@@ -243,19 +269,29 @@ impl AssetService {
                 .unwrap_or_else(|| root_name.to_string())
         };
         if metadata.is_dir() {
+            let description = folder_description(path);
             let mut children = Vec::new();
             for entry in fs::read_dir(path)? {
-                children.push(self.node_for_path(&entry?.path(), root_name)?);
+                let child_path = entry?.path();
+                if child_path.file_name().and_then(|name| name.to_str()) == Some("meta.json") {
+                    continue;
+                }
+                children.push(self.node_for_path(&child_path, root_name)?);
             }
             sort_asset_rows(&mut children);
-            return Ok(json!({
+            let mut node = json!({
                 "name": name,
                 "path": rel,
                 "type": "folder",
                 "children": children,
                 "size": 0,
-                "modified": now_iso()
-            }));
+                "modified": now_iso(),
+                "absolutePath": path.to_string_lossy()
+            });
+            if let Some(description) = description {
+                node["description"] = Value::String(description);
+            }
+            return Ok(node);
         }
         self.entry_to_json(path.to_path_buf())
     }
@@ -355,6 +391,15 @@ impl AssetService {
             .trim_start_matches('/')
             .to_string()
     }
+}
+
+fn folder_description(path: &Path) -> Option<String> {
+    let meta = fs::read_to_string(path.join("meta.json")).ok()?;
+    let value: Value = serde_json::from_str(&meta).ok()?;
+    value
+        .get("description")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
 }
 
 fn copy_missing(source: &Path, target: &Path) -> AppResult<()> {

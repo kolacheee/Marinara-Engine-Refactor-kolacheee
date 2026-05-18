@@ -95,12 +95,59 @@ async function formDataToJson(body: FormData): Promise<Record<string, unknown>> 
 
 function downloadJson(value: unknown, fallbackFilename: string) {
   const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+  downloadBlob(blob, fallbackFilename);
+}
+
+type BinaryDownloadPayload = {
+  base64?: unknown;
+  data?: unknown;
+  body?: unknown;
+  contentType?: unknown;
+  mimeType?: unknown;
+  filename?: unknown;
+};
+
+function isBinaryDownloadPayload(value: unknown): value is BinaryDownloadPayload {
+  if (!value || typeof value !== "object") return false;
+  const record = value as BinaryDownloadPayload;
+  return (
+    typeof record.base64 === "string" ||
+    typeof record.data === "string" ||
+    typeof record.body === "string"
+  );
+}
+
+function base64ToBlob(base64: string, contentType: string) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: contentType });
+}
+
+function downloadBlob(blob: Blob, fallbackFilename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = fallbackFilename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function downloadApiValue(value: unknown, fallbackFilename: string) {
+  if (isBinaryDownloadPayload(value)) {
+    const base64 =
+      typeof value.base64 === "string" ? value.base64 : typeof value.data === "string" ? value.data : String(value.body ?? "");
+    const contentType =
+      typeof value.contentType === "string"
+        ? value.contentType
+        : typeof value.mimeType === "string"
+          ? value.mimeType
+          : "application/octet-stream";
+    const filename = typeof value.filename === "string" && value.filename.trim() ? value.filename : fallbackFilename;
+    downloadBlob(base64ToBlob(base64, contentType), filename);
+    return;
+  }
+  downloadJson(value, fallbackFilename);
 }
 
 export function isJsonRepairApiError(error: unknown): boolean {
@@ -130,11 +177,11 @@ export const api = {
     request<T>("POST", path, await formDataToJson(body), init),
   download: async (path: string, fallbackFilename = "marinara-export.json"): Promise<void> => {
     const value = await request("GET", path);
-    downloadJson(value, fallbackFilename);
+    downloadApiValue(value, fallbackFilename);
   },
   downloadPost: async (path: string, body: unknown, fallbackFilename = "marinara-export.json"): Promise<void> => {
     const value = await request("POST", path, body);
-    downloadJson(value, fallbackFilename);
+    downloadApiValue(value, fallbackFilename);
   },
   raw: async (path: string, init?: RequestInit): Promise<Response> => {
     const value = await request("GET", path, undefined, init);

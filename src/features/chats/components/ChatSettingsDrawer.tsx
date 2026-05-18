@@ -88,6 +88,9 @@ import {
   chatKeys,
 } from "../../chats/hooks/use-chats";
 import { api } from "../../../shared/lib/api-client";
+import { generateConversationSchedules as runGenerateConversationSchedules } from "../../../engine/modes/chat/schedules/schedule.service";
+import { llmApi } from "../../../shared/api/llm-api";
+import { storageApi } from "../../../shared/api/storage-api";
 import { filterLanguageGenerationConnections } from "../../../shared/lib/connection-filters";
 import { getConnectedChatDisplayName } from "../../../shared/lib/chat-display";
 import {
@@ -142,13 +145,13 @@ import {
   type CustomToolRow,
 } from "../../agents/hooks/use-custom-tools";
 import { HapticConnectionPanel } from "./settings/HapticConnectionPanel";
-import { normalizeSpritePlacements } from "./sprite-placement";
+import { normalizeSpritePlacements } from "../../visuals/components/sprite-placement";
 import {
   DEFAULT_SPRITE_DISPLAY_MODES,
   hasSpriteDisplayMode,
   normalizeSpriteDisplayModes,
   type SpriteDisplayMode,
-} from "./sprite-display-modes";
+} from "../../visuals/components/sprite-display-modes";
 
 interface ChatSettingsDrawerProps {
   chat: Chat;
@@ -1102,7 +1105,7 @@ export function ChatSettingsDrawer({
       setIsRegeneratingSchedules(true);
       try {
         const scheduleGenerationPreferences = useUIStore.getState().scheduleGenerationPreferences;
-        await api.post("/conversation/schedule/generate", {
+        await runGenerateConversationSchedules({ storage: storageApi, llm: llmApi }, {
           chatId: chat.id,
           characterIds: chatCharIds,
           forceRefresh,
@@ -3560,7 +3563,7 @@ export function ChatSettingsDrawer({
                           : null;
                         const label = sceneConn
                           ? `${sceneConn.name}${sceneConn.model ? ` — ${sceneConn.model}` : ""}`
-                          : "Local sidecar (Gemma)";
+                          : "Chat/default connection";
                         return <p className="mt-0.5 text-[0.55rem] text-[var(--primary)]/70">{label}</p>;
                       })()}
                   </div>
@@ -3587,7 +3590,7 @@ export function ChatSettingsDrawer({
                       }
                       className="w-full rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-2.5 py-1.5 text-xs text-[var(--foreground)]"
                     >
-                      {import.meta.env.VITE_MARINARA_LITE !== "true" && <option value="">Local sidecar (Gemma)</option>}
+                      <option value="">Chat/default connection</option>
                       {((connections ?? []) as Array<{ id: string; name: string; model?: string }>)
                         .filter((c) => (c as { provider?: string }).provider !== "image_generation")
                         .map((c) => (

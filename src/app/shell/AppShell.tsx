@@ -37,7 +37,9 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 
-const ChatArea = lazy(() => import("../../features/chats/components/ChatArea").then((module) => ({ default: module.ChatArea })));
+const ModeSurface = lazy(() =>
+  import("../../features/modes/components/ModeSurface").then((module) => ({ default: module.ModeSurface })),
+);
 const BotBrowserView = lazy(() =>
   import("../../features/bot-browser/components/BotBrowserView").then((module) => ({ default: module.BotBrowserView })),
 );
@@ -834,7 +836,7 @@ export function AppShell() {
               } as CSSProperties
             }
           >
-            <Suspense fallback={<MainPaneFallback />}>{detailView ?? <ChatArea />}</Suspense>
+            <Suspense fallback={<MainPaneFallback />}>{detailView ?? <ModeSurface />}</Suspense>
           </div>
         </div>
         {/* Floating avatar notification bubbles (right edge) */}

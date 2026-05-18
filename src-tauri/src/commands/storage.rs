@@ -8,12 +8,17 @@ use std::time::Duration;
 use tauri::State;
 
 mod agents;
-mod backup;
+mod admin;
+mod avatars;
 mod backgrounds;
+mod backup;
 mod bot_browser;
 mod chat_presets;
+mod characters;
 mod chats;
 mod encounter;
+mod exports;
+mod fonts;
 mod game;
 mod game_assets;
 mod generation;
@@ -23,12 +28,12 @@ mod imports;
 mod integrations;
 mod knowledge;
 mod llm;
-mod makers;
 mod prompts;
 mod router;
 mod scene;
 mod shared;
 mod sprites;
+mod translation;
 
 #[tauri::command]
 pub async fn api_request(
@@ -37,7 +42,13 @@ pub async fn api_request(
     path: String,
     body: Option<Value>,
 ) -> Result<Value, AppError> {
-    router::route_request(&state, &method.to_uppercase(), &path, body.unwrap_or(Value::Null)).await
+    router::route_request(
+        &state,
+        &method.to_uppercase(),
+        &path,
+        body.unwrap_or(Value::Null),
+    )
+    .await
 }
 
 #[tauri::command]

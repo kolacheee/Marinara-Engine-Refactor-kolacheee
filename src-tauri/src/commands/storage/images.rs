@@ -1,10 +1,20 @@
-use super::*;
 use super::shared::*;
+use super::*;
+
+mod providers;
+
+pub(crate) use providers::generate_image_with_connection;
 
 pub(crate) fn avatar_generation_prompt_id(name: &str) -> String {
     let slug: String = name
         .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() { ch.to_ascii_lowercase() } else { '-' })
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
         .collect();
     format!("avatar-{}", slug.trim_matches('-'))
 }
@@ -35,7 +45,10 @@ pub(crate) fn image_dimension(body: &Value, key: &str, fallback: u64) -> u64 {
 }
 
 pub(crate) fn avatar_generation_preview(_state: &AppState, body: Value) -> AppResult<Value> {
-    let name = body.get("name").and_then(Value::as_str).unwrap_or("Character");
+    let name = body
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("Character");
     let prompt = avatar_generation_prompt(&body);
     Ok(json!({
         "items": [{
@@ -84,7 +97,9 @@ pub(crate) fn percent_encode_component(value: &str) -> String {
     let mut encoded = String::with_capacity(value.len());
     for byte in value.bytes() {
         match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => encoded.push(byte as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(byte as char)
+            }
             _ => {
                 encoded.push('%');
                 encoded.push(HEX[(byte >> 4) as usize] as char);
@@ -95,7 +110,11 @@ pub(crate) fn percent_encode_component(value: &str) -> String {
     encoded
 }
 
-pub(crate) async fn generate_pollinations_image(prompt: &str, width: u64, height: u64) -> AppResult<(String, String)> {
+pub(crate) async fn generate_pollinations_image(
+    prompt: &str,
+    width: u64,
+    height: u64,
+) -> AppResult<(String, String)> {
     let encoded_prompt = percent_encode_component(prompt);
     let seed = now_millis() % 1_000_000_000;
     let url = format!(
@@ -133,14 +152,21 @@ pub(crate) async fn avatar_generation(state: &AppState, body: Value) -> AppResul
     let connection_id = required_string(&body, "connectionId")?;
     let connection = get_required(state, "connections", connection_id)?;
     if connection.get("provider").and_then(Value::as_str) != Some("image_generation") {
-        return Err(AppError::invalid_input("Selected connection is not an image-generation connection"));
+        return Err(AppError::invalid_input(
+            "Selected connection is not an image-generation connection",
+        ));
     }
-    let name = body.get("name").and_then(Value::as_str).unwrap_or("Character");
+    let name = body
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("Character");
     let prompt_id = avatar_generation_prompt_id(name);
-    let prompt = prompt_override(&body, &prompt_id).unwrap_or_else(|| avatar_generation_prompt(&body));
+    let prompt =
+        prompt_override(&body, &prompt_id).unwrap_or_else(|| avatar_generation_prompt(&body));
     let width = image_dimension(&body, "width", 768);
     let height = image_dimension(&body, "height", 1024);
-    let (base64, mime_type) = generate_pollinations_image(&prompt, width, height).await?;
+    let (base64, mime_type) =
+        generate_image_with_connection(&connection, &prompt, width, height).await?;
     Ok(json!({
         "image": format!("data:{mime_type};base64,{base64}"),
         "prompt": prompt
@@ -150,11 +176,13 @@ pub(crate) async fn avatar_generation(state: &AppState, body: Value) -> AppResul
 pub(crate) async fn test_image_generation(state: &AppState, id: &str) -> AppResult<Value> {
     let connection = get_required(state, "connections", id)?;
     if connection.get("provider").and_then(Value::as_str) != Some("image_generation") {
-        return Err(AppError::invalid_input("Not an image-generation connection"));
+        return Err(AppError::invalid_input(
+            "Not an image-generation connection",
+        ));
     }
     let prompt = "plate of spaghetti with marinara sauce";
     let start = now_millis();
-    match generate_pollinations_image(prompt, 512, 512).await {
+    match generate_image_with_connection(&connection, prompt, 512, 512).await {
         Ok((base64, mime_type)) => Ok(json!({
             "success": true,
             "base64": base64,

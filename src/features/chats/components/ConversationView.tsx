@@ -26,9 +26,9 @@ import {
 } from "lucide-react";
 import { ConversationMessage } from "./ConversationMessage";
 import { ConversationInput } from "./ConversationInput";
-import { SceneBanner, EndSceneBar } from "./SceneBanner";
+import { SceneBanner, EndSceneBar } from "../../roleplay/components/SceneBanner";
 import { ChatBranchSelector } from "./ChatBranchSelector";
-import { ActiveWorldInfoButton, ActiveWorldInfoModal } from "./ActiveWorldInfoButton";
+import { ActiveWorldInfoButton, ActiveWorldInfoModal } from "../../visuals/components/ActiveWorldInfoButton";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { playNotificationPing } from "../../../shared/lib/notification-sound";

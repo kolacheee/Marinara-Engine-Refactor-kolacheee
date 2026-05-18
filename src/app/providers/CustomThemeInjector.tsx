@@ -5,6 +5,7 @@
 import { useEffect, useMemo } from "react";
 import { useThemes } from "../../features/settings/hooks/use-themes";
 import { useExtensions } from "../../features/settings/hooks/use-extensions";
+import { api } from "../../shared/api/api-client";
 import { useUIStore } from "../../shared/stores/ui.store";
 
 type ExtensionGlobal = typeof globalThis & {
@@ -179,7 +180,7 @@ export function CustomThemeInjector() {
           // privileged routes. The denylist runs on the *canonical* pathname
           // produced by the WHATWG URL parser, so `%2e%2e/admin` and other
           // dot-segment / encoded-traversal payloads can't sneak past.
-          apiFetch: async (path: string, _options?: RequestInit) => {
+          apiFetch: async (path: string, options?: RequestInit) => {
             const normalized = path.startsWith("/") ? path : `/${path}`;
             const url = new URL(`/api${normalized}`, window.location.origin);
             const apiPath = url.pathname.replace(/^\/api(?=\/|$)/, "");
@@ -193,7 +194,34 @@ export function CustomThemeInjector() {
               console.warn(`[Extension:${ext.name}] ${message}`);
               return Promise.reject(new Error(message));
             }
-            throw new Error("Extension apiFetch is unavailable until the Rust extension backend exists.");
+            const method = (options?.method ?? "GET").toUpperCase();
+            let body: unknown = undefined;
+            if (options?.body instanceof FormData) {
+              body = options.body;
+            } else if (typeof options?.body === "string" && options.body.trim()) {
+              try {
+                body = JSON.parse(options.body);
+              } catch {
+                body = options.body;
+              }
+            } else {
+              body = options?.body ?? undefined;
+            }
+
+            const result =
+              method === "POST"
+                ? await api.post(apiPath, body)
+                : method === "PUT"
+                  ? await api.put(apiPath, body)
+                  : method === "PATCH"
+                    ? await api.patch(apiPath, body)
+                    : method === "DELETE"
+                      ? await api.delete(apiPath)
+                      : await api.get(apiPath);
+            return new Response(JSON.stringify(result), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            });
           },
 
           // addEventListener with auto-cleanup

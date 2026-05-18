@@ -1,5 +1,5 @@
-use super::*;
 use super::shared::*;
+use super::*;
 
 pub(crate) async fn http_json(url: &str) -> AppResult<Value> {
     let client = reqwest::Client::builder()
@@ -39,7 +39,10 @@ pub(crate) async fn http_binary(url: &str, fallback_mime: &str) -> AppResult<Val
         .map_err(|error| AppError::new("upstream_request_failed", error.to_string()))?;
     let status = response.status();
     if !status.is_success() {
-        return Err(AppError::new("upstream_request_failed", format!("Upstream returned {status}")));
+        return Err(AppError::new(
+            "upstream_request_failed",
+            format!("Upstream returned {status}"),
+        ));
     }
     let mime_type = response
         .headers()
@@ -60,7 +63,12 @@ pub(crate) async fn http_binary(url: &str, fallback_mime: &str) -> AppResult<Val
 pub(crate) async fn gifs_search(route: &ParsedPath) -> AppResult<Value> {
     let api_key = std::env::var("GIPHY_API_KEY")
         .or_else(|_| std::env::var("VITE_GIPHY_API_KEY"))
-        .map_err(|_| AppError::new("external_service_unavailable", "GIF search requires GIPHY_API_KEY"))?;
+        .map_err(|_| {
+            AppError::new(
+                "external_service_unavailable",
+                "GIF search requires GIPHY_API_KEY",
+            )
+        })?;
     let query = route.query.get("q").cloned().unwrap_or_default();
     let limit = route
         .query
@@ -73,7 +81,11 @@ pub(crate) async fn gifs_search(route: &ParsedPath) -> AppResult<Value> {
         .get("pos")
         .and_then(|value| value.parse::<u32>().ok())
         .unwrap_or(0);
-    let endpoint = if query.trim().is_empty() { "trending" } else { "search" };
+    let endpoint = if query.trim().is_empty() {
+        "trending"
+    } else {
+        "search"
+    };
     let client = reqwest::Client::new();
     let mut request = client
         .get(format!("https://api.giphy.com/v1/gifs/{endpoint}"))
@@ -93,11 +105,21 @@ pub(crate) async fn gifs_search(route: &ParsedPath) -> AppResult<Value> {
         .json::<Value>()
         .await
         .map_err(|error| AppError::new("gif_response_error", error.to_string()))?;
-    let items = data.get("data").and_then(Value::as_array).cloned().unwrap_or_default();
+    let items = data
+        .get("data")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let pagination = data.get("pagination").cloned().unwrap_or_else(|| json!({}));
-    let current_offset = pagination.get("offset").and_then(Value::as_u64).unwrap_or(0);
+    let current_offset = pagination
+        .get("offset")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     let count = pagination.get("count").and_then(Value::as_u64).unwrap_or(0);
-    let total = pagination.get("total_count").and_then(Value::as_u64).unwrap_or(0);
+    let total = pagination
+        .get("total_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     let next_offset = current_offset + count;
     let results = items
         .into_iter()
@@ -126,5 +148,7 @@ pub(crate) async fn gifs_search(route: &ParsedPath) -> AppResult<Value> {
             })
         })
         .collect::<Vec<_>>();
-    Ok(json!({ "results": results, "next": if next_offset < total { next_offset.to_string() } else { String::new() } }))
+    Ok(
+        json!({ "results": results, "next": if next_offset < total { next_offset.to_string() } else { String::new() } }),
+    )
 }

@@ -2,6 +2,8 @@
 // React Query: Lorebook hooks
 // ──────────────────────────────────────────────
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
+import { scanActiveLorebookEntries } from "../../../engine/generation";
+import { storageApi } from "../../../shared/api/storage-api";
 import { api, ApiError } from "../../../shared/lib/api-client";
 import type { Lorebook, LorebookEntry, LorebookFolder } from "@marinara-engine/shared";
 import { characterKeys } from "../../characters/hooks/use-characters";
@@ -366,7 +368,7 @@ export interface ActiveLorebookScan {
 export function useActiveLorebookEntries(chatId: string | null, enabled = false) {
   return useQuery({
     queryKey: lorebookKeys.active(chatId),
-    queryFn: () => api.get<ActiveLorebookScan>(`/lorebooks/scan/${chatId}`),
+    queryFn: () => scanActiveLorebookEntries(storageApi, chatId!) as Promise<ActiveLorebookScan>,
     enabled: !!chatId && enabled,
     staleTime: 30_000,
   });

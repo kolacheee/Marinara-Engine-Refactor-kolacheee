@@ -8,7 +8,7 @@ import { useGameModeStore } from "../stores/game-mode.store";
 import { useGameAssetStore } from "../stores/game-asset.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
-import { useGameStateStore } from "../stores/game-state.store";
+import { useGameStateStore } from "../../world-state/stores/world-state.store";
 import {
   useSyncGameState,
   useCreateGame,
@@ -74,10 +74,10 @@ import { filterGameAssetMap, parseGameAssetExcludedFolders } from "../lib/game-a
 import { resolveCombatFullBodyPose, resolveDialogueFullBodyPose } from "../lib/game-full-body-pose";
 import { characterNamesMatch, findNamedEntry } from "../lib/game-character-name-match";
 import { normalizeGameSegmentEdit, serializeGameSegmentEdit, type GameSegmentEdit } from "../lib/game-segment-edits";
-import { useSceneAnalysis } from "../../roleplay/hooks/use-scene-analysis";
+import { useSceneAnalysis } from "../../visuals/hooks/use-scene-analysis";
 import { parsePartyDialogue } from "../lib/party-dialogue-parser";
 import { dispatchSpotifySceneTrackChange } from "../../../shared/lib/spotify-playback-events";
-import { ActiveWorldInfoButton, ActiveWorldInfoModal } from "../../chats/components/ActiveWorldInfoButton";
+import { ActiveWorldInfoButton, ActiveWorldInfoModal } from "../../visuals/components/ActiveWorldInfoButton";
 import type {
   PartyDialogueLine,
   CombatSummary,
@@ -124,7 +124,7 @@ import {
 import { GameTutorial } from "./GameTutorial";
 import { DirectionEngine } from "./DirectionEngine";
 import { GameWidgetPanel, GameWidgetSessionPrepModal, MobileWidgetPanel } from "./GameWidgetPanel";
-import { WeatherEffects } from "../../chats/components/WeatherEffects";
+import { WeatherEffects } from "../../visuals/components/WeatherEffects";
 import { GameInventory } from "./GameInventory";
 import { GameReadableDisplay } from "./GameReadableDisplay";
 import {
@@ -925,7 +925,7 @@ function buildNpcAvatarLookup(
 }
 
 const SpriteOverlay = lazy(async () => {
-  const module = await import("../../chats/components/SpriteOverlay");
+  const module = await import("../../visuals/components/SpriteOverlay");
   return { default: module.SpriteOverlay };
 });
 

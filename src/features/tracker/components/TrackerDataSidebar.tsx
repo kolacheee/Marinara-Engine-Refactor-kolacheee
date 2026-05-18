@@ -9,13 +9,13 @@ import {
 } from "@marinara-engine/shared";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
-import { useGameStateStore } from "../../game/stores/game-state.store";
+import { useGameStateStore } from "../../world-state/stores/world-state.store";
 import { useAgentStore } from "../../../shared/stores/agent.store";
 import { useChat, useChatMessages, useUpdateChatMetadata } from "../../chats/hooks/use-chats";
 import { useAgentConfigs, useUpdateAgent, type AgentConfigRow } from "../../agents/hooks/use-agents";
 import { useCharacters, usePersonas } from "../../characters/hooks/use-characters";
 import { useGenerate } from "../../generation/hooks/use-generate";
-import { useGameStatePatcher } from "../../game/hooks/use-game-state-patcher";
+import { useGameStatePatcher } from "../../world-state/hooks/use-world-state-patcher";
 import { api } from "../../../shared/lib/api-client";
 import { parseCharacterDisplayData } from "../../../shared/lib/character-display";
 import { cn } from "../../../shared/lib/utils";

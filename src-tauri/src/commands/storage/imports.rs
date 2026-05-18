@@ -1,5 +1,5 @@
-use super::*;
 use super::shared::*;
+use super::*;
 mod bulk_imports;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
@@ -77,9 +77,14 @@ fn extract_chara_from_png(bytes: &[u8]) -> AppResult<Value> {
                     let compression_flag = payload[null_index + 1];
                     if compression_flag == 0 {
                         let language_start = null_index + 3;
-                        if let Some(language_end_rel) = payload[language_start..].iter().position(|byte| *byte == 0) {
+                        if let Some(language_end_rel) =
+                            payload[language_start..].iter().position(|byte| *byte == 0)
+                        {
                             let translated_start = language_start + language_end_rel + 1;
-                            if let Some(translated_end_rel) = payload[translated_start..].iter().position(|byte| *byte == 0) {
+                            if let Some(translated_end_rel) = payload[translated_start..]
+                                .iter()
+                                .position(|byte| *byte == 0)
+                            {
                                 let text_start = translated_start + translated_end_rel + 1;
                                 let text = String::from_utf8_lossy(&payload[text_start..]);
                                 if let Some(parsed) = parse_chara_text(&text) {
@@ -117,7 +122,9 @@ fn read_zip_entry(bytes: &[u8], name: &str) -> AppResult<Option<Vec<u8>>> {
             Ok(Some(contents))
         }
         Err(zip::result::ZipError::FileNotFound) => Ok(None),
-        Err(error) => Err(AppError::invalid_input(format!("Could not read zip entry {name}: {error}"))),
+        Err(error) => Err(AppError::invalid_input(format!(
+            "Could not read zip entry {name}: {error}"
+        ))),
     };
     result
 }
@@ -128,12 +135,34 @@ fn read_zip_entry_names(bytes: &[u8]) -> AppResult<Vec<String>> {
         .map_err(|error| AppError::invalid_input(format!("Could not read zip archive: {error}")))?;
     let mut names = Vec::new();
     for index in 0..archive.len() {
-        let file = archive
-            .by_index(index)
-            .map_err(|error| AppError::invalid_input(format!("Could not read zip entry: {error}")))?;
+        let file = archive.by_index(index).map_err(|error| {
+            AppError::invalid_input(format!("Could not read zip entry: {error}"))
+        })?;
         names.push(file.name().to_string());
     }
     Ok(names)
+}
+
+fn directory_listing(path: PathBuf) -> AppResult<Value> {
+    if !path.is_dir() {
+        return Ok(json!({ "success": false, "error": "Not a directory" }));
+    }
+    let mut folders: Vec<String> = fs::read_dir(&path)
+        .map(|rows| {
+            rows.filter_map(Result::ok)
+                .filter(|entry| entry.path().is_dir())
+                .filter_map(|entry| entry.file_name().to_str().map(ToOwned::to_owned))
+                .filter(|name| !name.starts_with('.'))
+                .collect()
+        })
+        .unwrap_or_default();
+    folders.sort_by_key(|name| name.to_ascii_lowercase());
+    Ok(json!({
+        "success": true,
+        "path": path.to_string_lossy(),
+        "folderToken": path.to_string_lossy(),
+        "folders": folders
+    }))
 }
 
 fn image_mime_from_path(path: &str) -> &'static str {
@@ -172,20 +201,27 @@ fn resolve_charx_asset(bytes: &[u8], uri: &str, ext: Option<&str>) -> AppResult<
         return Ok(None);
     };
     let mime = ext
-        .map(|value| match value.trim_start_matches('.').to_ascii_lowercase().as_str() {
-            "jpg" | "jpeg" => "image/jpeg",
-            "webp" => "image/webp",
-            "gif" => "image/gif",
-            "avif" => "image/avif",
-            _ => "image/png",
-        })
+        .map(
+            |value| match value.trim_start_matches('.').to_ascii_lowercase().as_str() {
+                "jpg" | "jpeg" => "image/jpeg",
+                "webp" => "image/webp",
+                "gif" => "image/gif",
+                "avif" => "image/avif",
+                _ => "image/png",
+            },
+        )
         .unwrap_or_else(|| image_mime_from_path(zip_path));
-    Ok(Some(format!("data:{mime};base64,{}", general_purpose::STANDARD.encode(asset))))
+    Ok(Some(format!(
+        "data:{mime};base64,{}",
+        general_purpose::STANDARD.encode(asset)
+    )))
 }
 
 fn extract_charx(bytes: &[u8]) -> AppResult<Value> {
     let Some(card_bytes) = read_zip_entry(bytes, "card.json")? else {
-        return Err(AppError::invalid_input("Invalid .charx file: missing card.json at root."));
+        return Err(AppError::invalid_input(
+            "Invalid .charx file: missing card.json at root.",
+        ));
     };
     let mut card = parse_object(&card_bytes)?;
     let card_data = card
@@ -196,8 +232,15 @@ fn extract_charx(bytes: &[u8]) -> AppResult<Value> {
     if let Some(assets) = card_data.get("assets").and_then(Value::as_array) {
         let selected = assets
             .iter()
-            .find(|asset| asset.get("type").and_then(Value::as_str) == Some("icon") && asset.get("name").and_then(Value::as_str) == Some("main"))
-            .or_else(|| assets.iter().find(|asset| asset.get("type").and_then(Value::as_str) == Some("icon")));
+            .find(|asset| {
+                asset.get("type").and_then(Value::as_str) == Some("icon")
+                    && asset.get("name").and_then(Value::as_str) == Some("main")
+            })
+            .or_else(|| {
+                assets
+                    .iter()
+                    .find(|asset| asset.get("type").and_then(Value::as_str) == Some("icon"))
+            });
         if let Some(asset) = selected {
             if let Some(uri) = asset.get("uri").and_then(Value::as_str) {
                 avatar = resolve_charx_asset(bytes, uri, asset.get("ext").and_then(Value::as_str))?;
@@ -212,7 +255,10 @@ fn extract_charx(bytes: &[u8]) -> AppResult<Value> {
         ] {
             if let Some(asset) = read_zip_entry(bytes, fallback)? {
                 let mime = image_mime_from_path(fallback);
-                avatar = Some(format!("data:{mime};base64,{}", general_purpose::STANDARD.encode(asset)));
+                avatar = Some(format!(
+                    "data:{mime};base64,{}",
+                    general_purpose::STANDARD.encode(asset)
+                ));
                 break;
             }
         }
@@ -230,12 +276,15 @@ fn parse_character_file(filename: &str, bytes: &[u8]) -> AppResult<Value> {
     let lower = filename.to_ascii_lowercase();
     if lower.ends_with(".png") {
         let mut payload = extract_chara_from_png(bytes)?;
-        let object = payload
-            .as_object_mut()
-            .ok_or_else(|| AppError::invalid_input("Embedded character data must be a JSON object"))?;
+        let object = payload.as_object_mut().ok_or_else(|| {
+            AppError::invalid_input("Embedded character data must be a JSON object")
+        })?;
         object.insert(
             "_avatarDataUrl".to_string(),
-            Value::String(format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(bytes))),
+            Value::String(format!(
+                "data:image/png;base64,{}",
+                general_purpose::STANDARD.encode(bytes)
+            )),
         );
         return Ok(payload);
     }
@@ -264,23 +313,42 @@ pub(crate) fn import_payload(body: Value) -> AppResult<Value> {
 }
 
 fn string_field(value: &Value, key: &str) -> String {
-    value.get(key).and_then(Value::as_str).unwrap_or("").to_string()
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string()
 }
 
 fn string_array(value: Option<&Value>) -> Vec<String> {
     match value {
-        Some(Value::Array(items)) => items.iter().filter_map(Value::as_str).map(ToOwned::to_owned).collect(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(ToOwned::to_owned)
+            .collect(),
         Some(Value::String(raw)) if !raw.trim().is_empty() => vec![raw.to_string()],
         _ => Vec::new(),
     }
 }
 
 fn source_character_data(payload: &Value) -> Value {
-    if matches!(payload.get("spec").and_then(Value::as_str), Some("chara_card_v2" | "chara_card_v3")) {
-        return payload.get("data").filter(|value| value.is_object()).cloned().unwrap_or_else(|| payload.clone());
+    if matches!(
+        payload.get("spec").and_then(Value::as_str),
+        Some("chara_card_v2" | "chara_card_v3")
+    ) {
+        return payload
+            .get("data")
+            .filter(|value| value.is_object())
+            .cloned()
+            .unwrap_or_else(|| payload.clone());
     }
     if payload.get("type").and_then(Value::as_str) == Some("character") {
-        return payload.get("data").filter(|value| value.is_object()).cloned().unwrap_or_else(|| payload.clone());
+        return payload
+            .get("data")
+            .filter(|value| value.is_object())
+            .cloned()
+            .unwrap_or_else(|| payload.clone());
     }
     payload.clone()
 }
@@ -291,7 +359,12 @@ fn embedded_lorebook(payload: &Value) -> Option<Value> {
         .get("character_book")
         .filter(|book| lorebook_entry_count(book) > 0)
         .cloned()
-        .or_else(|| payload.get("character_book").filter(|book| lorebook_entry_count(book) > 0).cloned())
+        .or_else(|| {
+            payload
+                .get("character_book")
+                .filter(|book| lorebook_entry_count(book) > 0)
+                .cloned()
+        })
 }
 
 fn normalize_character_data(payload: &Value, tag_mode: &str, existing_tags: &[String]) -> Value {
@@ -336,13 +409,21 @@ fn lorebook_entry_count(value: &Value) -> usize {
 
 fn number(value: Option<&Value>, fallback: i64) -> i64 {
     value
-        .and_then(|value| value.as_i64().or_else(|| value.as_str().and_then(|raw| raw.parse::<i64>().ok())))
+        .and_then(|value| {
+            value
+                .as_i64()
+                .or_else(|| value.as_str().and_then(|raw| raw.parse::<i64>().ok()))
+        })
         .unwrap_or(fallback)
 }
 
 fn optional_number(value: Option<&Value>) -> Value {
     value
-        .and_then(|value| value.as_i64().or_else(|| value.as_str().and_then(|raw| raw.parse::<i64>().ok())))
+        .and_then(|value| {
+            value
+                .as_i64()
+                .or_else(|| value.as_str().and_then(|raw| raw.parse::<i64>().ok()))
+        })
         .map_or(Value::Null, |value| json!(value))
 }
 
@@ -352,14 +433,19 @@ fn bool_field(value: Option<&Value>, fallback: bool) -> bool {
 
 fn normalize_lorebook_entry(lorebook_id: &str, entry: &Value, index: usize) -> Value {
     let keys = entry.get("key").or_else(|| entry.get("keys"));
-    let secondary = entry.get("keysecondary").or_else(|| entry.get("secondary_keys"));
+    let secondary = entry
+        .get("keysecondary")
+        .or_else(|| entry.get("secondary_keys"));
     let enabled = entry
         .get("disable")
         .and_then(Value::as_bool)
         .map(|disabled| !disabled)
         .unwrap_or_else(|| bool_field(entry.get("enabled"), true));
     let role = match entry.get("role").and_then(Value::as_str) {
-        Some("user" | "assistant" | "system") => entry.get("role").and_then(Value::as_str).unwrap_or("system"),
+        Some("user" | "assistant" | "system") => entry
+            .get("role")
+            .and_then(Value::as_str)
+            .unwrap_or("system"),
         _ => "system",
     };
     let position = match entry.get("position") {
@@ -413,7 +499,11 @@ fn normalize_lorebook_entry(lorebook_id: &str, entry: &Value, index: usize) -> V
     })
 }
 
-fn normalize_lorebook(payload: &Value, fallback_name: &str, character_id: Option<&str>) -> (Value, Vec<Value>) {
+fn normalize_lorebook(
+    payload: &Value,
+    fallback_name: &str,
+    character_id: Option<&str>,
+) -> (Value, Vec<Value>) {
     let name = payload
         .get("name")
         .and_then(Value::as_str)
@@ -451,11 +541,16 @@ fn create_lorebook_from_payload(
 ) -> AppResult<Value> {
     let (lorebook, entries) = normalize_lorebook(payload, fallback_name, character_id);
     let record = state.storage.create("lorebooks", lorebook)?;
-    let lorebook_id = record.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+    let lorebook_id = record
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     for (index, entry) in entries.iter().enumerate() {
-        state
-            .storage
-            .create("lorebook-entries", normalize_lorebook_entry(&lorebook_id, entry, index))?;
+        state.storage.create(
+            "lorebook-entries",
+            normalize_lorebook_entry(&lorebook_id, entry, index),
+        )?;
     }
     Ok(json!({
         "success": true,
@@ -466,8 +561,16 @@ fn create_lorebook_from_payload(
     }))
 }
 
-fn import_st_character_payload(state: &AppState, payload: Value, filename: Option<String>, body: &Value) -> AppResult<Value> {
-    let tag_mode = body.get("tagImportMode").and_then(Value::as_str).unwrap_or("all");
+fn import_st_character_payload(
+    state: &AppState,
+    payload: Value,
+    filename: Option<String>,
+    body: &Value,
+) -> AppResult<Value> {
+    let tag_mode = body
+        .get("tagImportMode")
+        .and_then(Value::as_str)
+        .unwrap_or("all");
     let existing_tags: Vec<String> = state
         .storage
         .list("characters")?
@@ -482,7 +585,11 @@ fn import_st_character_payload(state: &AppState, payload: Value, filename: Optio
         })
         .collect();
     let data = normalize_character_data(&payload, tag_mode, &existing_tags);
-    let name = data.get("name").and_then(Value::as_str).unwrap_or("Imported Character").to_string();
+    let name = data
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("Imported Character")
+        .to_string();
     let record = json!({
         "data": serde_json::to_string(&data)?,
         "comment": data.get("creator_notes").and_then(Value::as_str).unwrap_or(""),
@@ -499,13 +606,22 @@ fn import_st_character_payload(state: &AppState, payload: Value, filename: Optio
         .get("importEmbeddedLorebook")
         .and_then(Value::as_str)
         .map(|raw| raw != "false")
-        .unwrap_or_else(|| body.get("importEmbeddedLorebook").and_then(Value::as_bool).unwrap_or(true));
+        .unwrap_or_else(|| {
+            body.get("importEmbeddedLorebook")
+                .and_then(Value::as_bool)
+                .unwrap_or(true)
+        });
     let embedded = embedded_lorebook(&payload);
     let mut lorebook_result = Value::Null;
     if import_embedded {
         if let Some(book) = embedded.as_ref() {
             let character_id = character.get("id").and_then(Value::as_str);
-            lorebook_result = create_lorebook_from_payload(state, book, &format!("{name}'s Lorebook"), character_id)?;
+            lorebook_result = create_lorebook_from_payload(
+                state,
+                book,
+                &format!("{name}'s Lorebook"),
+                character_id,
+            )?;
         }
     }
 
@@ -553,7 +669,8 @@ fn import_st_character_batch(state: &AppState, body: Value) -> AppResult<Value> 
                 }
                 results.push(value);
             }
-            Err(error) => results.push(json!({ "filename": filename, "success": false, "error": error.message })),
+            Err(error) => results
+                .push(json!({ "filename": filename, "success": false, "error": error.message })),
         }
     }
     Ok(json!({ "success": true, "results": results }))
@@ -594,7 +711,9 @@ fn import_marinara_package(state: &AppState, body: Value) -> AppResult<Value> {
             .ok_or_else(|| AppError::invalid_input("file is required"))?,
     )?;
     if uploaded.bytes.len() < 4 || uploaded.bytes[0] != 0x50 || uploaded.bytes[1] != 0x4b {
-        return Err(AppError::invalid_input("Not a .marinara package (zip signature missing)"));
+        return Err(AppError::invalid_input(
+            "Not a .marinara package (zip signature missing)",
+        ));
     }
 
     let names = read_zip_entry_names(&uploaded.bytes)?;
@@ -602,7 +721,9 @@ fn import_marinara_package(state: &AppState, body: Value) -> AppResult<Value> {
     const MAX_DATA_JSON_BYTES: usize = 5 * 1024 * 1024;
     const MAX_AVATAR_BYTES: usize = 20 * 1024 * 1024;
     if names.len() > MAX_PACKAGE_ENTRIES {
-        return Err(AppError::invalid_input(".marinara package has too many entries"));
+        return Err(AppError::invalid_input(
+            ".marinara package has too many entries",
+        ));
     }
 
     let data_bytes = read_zip_entry(&uploaded.bytes, "data.json")?
@@ -627,20 +748,31 @@ fn import_marinara_package(state: &AppState, body: Value) -> AppResult<Value> {
         let avatar = read_zip_entry(&uploaded.bytes, &avatar_name)?
             .ok_or_else(|| AppError::invalid_input("Could not read package avatar"))?;
         if avatar.len() > MAX_AVATAR_BYTES {
-            return Err(AppError::invalid_input("Avatar image in package is too large"));
+            return Err(AppError::invalid_input(
+                "Avatar image in package is too large",
+            ));
         }
         let mime = image_mime_from_path(&avatar_name);
         if let Some(data) = envelope.get_mut("data").and_then(Value::as_object_mut) {
             data.insert(
                 "avatar".to_string(),
-                Value::String(format!("data:{mime};base64,{}", general_purpose::STANDARD.encode(avatar))),
+                Value::String(format!(
+                    "data:{mime};base64,{}",
+                    general_purpose::STANDARD.encode(avatar)
+                )),
             );
         }
     }
 
-    if let Some(timestamp_overrides) = body.get("timestampOverrides").cloned().or_else(|| body.get("__timestampOverrides").cloned()) {
+    if let Some(timestamp_overrides) = body
+        .get("timestampOverrides")
+        .cloned()
+        .or_else(|| body.get("__timestampOverrides").cloned())
+    {
         if let Some(data) = envelope.get_mut("data").and_then(Value::as_object_mut) {
-            let metadata = data.entry("metadata".to_string()).or_insert_with(|| json!({}));
+            let metadata = data
+                .entry("metadata".to_string())
+                .or_insert_with(|| json!({}));
             if let Some(metadata) = metadata.as_object_mut() {
                 metadata.insert("timestamps".to_string(), timestamp_overrides);
             }
@@ -655,22 +787,36 @@ fn import_marinara_envelope(state: &AppState, envelope: Value) -> AppResult<Valu
         .as_object()
         .ok_or_else(|| AppError::invalid_input("Invalid Marinara import envelope"))?;
     if object.get("version").and_then(Value::as_i64) != Some(1) {
-        return Err(AppError::invalid_input("Unsupported Marinara import version"));
+        return Err(AppError::invalid_input(
+            "Unsupported Marinara import version",
+        ));
     }
     let import_type = object.get("type").and_then(Value::as_str).unwrap_or("");
     let data = object.get("data").cloned().unwrap_or(Value::Null);
     match import_type {
         "marinara_character" => import_st_character_payload(state, data, None, &Value::Null),
         "marinara_persona" => {
-            let record = state.storage.create("personas", with_entity_defaults("personas", data))?;
-            Ok(json!({ "success": true, "type": import_type, "id": record.get("id").cloned().unwrap_or(Value::Null), "name": record.get("name").cloned().unwrap_or(Value::Null) }))
+            let record = state
+                .storage
+                .create("personas", with_entity_defaults("personas", data))?;
+            Ok(
+                json!({ "success": true, "type": import_type, "id": record.get("id").cloned().unwrap_or(Value::Null), "name": record.get("name").cloned().unwrap_or(Value::Null) }),
+            )
         }
-        "marinara_lorebook" => create_lorebook_from_payload(state, &data, "Imported Lorebook", None),
+        "marinara_lorebook" => {
+            create_lorebook_from_payload(state, &data, "Imported Lorebook", None)
+        }
         "marinara_preset" => {
-            let record = state.storage.create("prompts", with_entity_defaults("prompts", data))?;
-            Ok(json!({ "success": true, "type": import_type, "id": record.get("id").cloned().unwrap_or(Value::Null), "name": record.get("name").cloned().unwrap_or(Value::Null) }))
+            let record = state
+                .storage
+                .create("prompts", with_entity_defaults("prompts", data))?;
+            Ok(
+                json!({ "success": true, "type": import_type, "id": record.get("id").cloned().unwrap_or(Value::Null), "name": record.get("name").cloned().unwrap_or(Value::Null) }),
+            )
         }
-        _ => Err(AppError::invalid_input(format!("Unknown Marinara import type: {import_type}"))),
+        _ => Err(AppError::invalid_input(format!(
+            "Unknown Marinara import type: {import_type}"
+        ))),
     }
 }
 
@@ -698,11 +844,22 @@ pub(crate) fn import_call(state: &AppState, rest: &[&str], body: Value) -> AppRe
         ["st-chat-into-group"] => bulk_imports::import_st_chat_into_group(state, body),
         ["st-preset"] => state
             .storage
-            .create("prompts", with_entity_defaults("prompts", import_payload(body)?))
+            .create(
+                "prompts",
+                with_entity_defaults("prompts", import_payload(body)?),
+            )
             .map(|record| json!({ "success": true, "preset": record })),
         ["st-lorebook"] => {
             let payload = import_payload(body)?;
-            create_lorebook_from_payload(state, &payload, payload.get("__filename").and_then(Value::as_str).unwrap_or("Imported Lorebook"), None)
+            create_lorebook_from_payload(
+                state,
+                &payload,
+                payload
+                    .get("__filename")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Imported Lorebook"),
+                None,
+            )
         }
         ["list-directory"] => {
             let path = body.get("path").and_then(Value::as_str).unwrap_or("");
@@ -714,30 +871,17 @@ pub(crate) fn import_call(state: &AppState, rest: &[&str], body: Value) -> AppRe
                 path.to_string()
             };
             let resolved = PathBuf::from(base);
-            if !resolved.is_dir() {
-                return Ok(json!({ "success": false, "error": "Not a directory" }));
-            }
-            let mut folders: Vec<String> = fs::read_dir(&resolved)
-                .map(|rows| {
-                    rows.filter_map(Result::ok)
-                        .filter(|entry| entry.path().is_dir())
-                        .filter_map(|entry| entry.file_name().to_str().map(ToOwned::to_owned))
-                        .filter(|name| !name.starts_with('.'))
-                        .collect()
-                })
-                .unwrap_or_default();
-            folders.sort_by_key(|name| name.to_ascii_lowercase());
-            Ok(json!({
-                "success": true,
-                "path": resolved.to_string_lossy(),
-                "folderToken": resolved.to_string_lossy(),
-                "folders": folders
-            }))
+            directory_listing(resolved)
         }
-        ["pick-folder"] => Ok(json!({ "success": false, "error": "Use the folder browser or paste a folder path." })),
+        ["pick-folder"] => match rfd::FileDialog::new().pick_folder() {
+            Some(path) => directory_listing(path),
+            None => Ok(json!({ "success": false, "cancelled": true })),
+        },
         ["st-bulk", "scan"] => bulk_imports::scan_st_folder(body),
         ["st-bulk", "run"] => bulk_imports::run_st_bulk_import(state, body),
-        _ => Err(AppError::new("route_not_found", format!("import route /{} is not implemented", rest.join("/")))),
+        _ => Err(AppError::new(
+            "route_not_found",
+            format!("Unknown import route: /{}", rest.join("/")),
+        )),
     }
 }
-

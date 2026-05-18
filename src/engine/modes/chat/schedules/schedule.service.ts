@@ -4,7 +4,9 @@
 // Generates and manages weekly schedules for characters in Conversation mode.
 // Schedules are stored in chat metadata and drive the status system.
 
-import type { BaseLLMProvider } from "../../../generation-core/llm/base-provider.js";
+import type { LlmGateway, LlmMessage, StorageGateway } from "../../../capabilities";
+import { parseJsonArray, parseJsonObject } from "../../../core/json";
+import type { BaseLLMProvider, ChatMessage } from "../../../generation-core/llm/base-provider.js";
 
 // ── Types ──
 
@@ -42,9 +44,24 @@ export interface CharacterSchedules {
   [characterId: string]: WeekSchedule;
 }
 
+type JsonRecord = Record<string, unknown>;
+
+export interface GenerateConversationSchedulesInput {
+  chatId: string;
+  forceRefresh?: boolean;
+  characterIds?: string[];
+  scheduleGenerationPreferences?: string;
+}
+
+export interface GenerateConversationSchedulesResult {
+  results: Record<string, { status: string; schedule?: WeekSchedule }>;
+  schedules: CharacterSchedules;
+}
+
 // ── Constants ──
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const SCHEDULE_CONTINUITY_MAX_CHARS = 6000;
 
 const STATUS_KEYWORDS: Record<string, "online" | "idle" | "dnd" | "offline"> = {
   sleep: "offline",
@@ -76,6 +93,104 @@ const STATUS_KEYWORDS: Record<string, "online" | "idle" | "dnd" | "offline"> = {
   eating: "idle",
   meal: "idle",
 };
+
+export async function generateConversationSchedules(
+  capabilities: { storage: StorageGateway; llm: LlmGateway },
+  input: GenerateConversationSchedulesInput,
+): Promise<GenerateConversationSchedulesResult> {
+  const chat = await capabilities.storage.get<JsonRecord>("chats", input.chatId);
+  if (!chat) throw new Error("Chat not found");
+  if (chat.mode !== "conversation") throw new Error("Not a conversation chat");
+
+  const connection = await resolveScheduleConnection(capabilities.storage, stringValue(chat.connectionId));
+  const connectionId = stringValue(connection.id);
+  if (!connectionId) throw new Error("No connection configured");
+
+  const meta = parseJsonObject(chat.metadata);
+  const existingSchedules = hasSchedules(meta.characterSchedules) ? meta.characterSchedules : {};
+  const characterIds =
+    input.characterIds?.length ? input.characterIds : parseJsonArray<string>(chat.characterIds).filter(Boolean);
+  const provider = createScheduleProvider(capabilities.llm, connectionId, numberOrNull(connection.maxTokensOverride));
+  const model = stringValue(connection.model);
+  const mondayStr = getMonday().toISOString();
+  const userSchedulePreferences =
+    typeof input.scheduleGenerationPreferences === "string" ? input.scheduleGenerationPreferences.trim() : "";
+
+  const newSchedules: CharacterSchedules = { ...existingSchedules };
+  const results: Record<string, { status: string; schedule?: WeekSchedule }> = {};
+  let otherChatSchedules: Map<string, WeekSchedule> | null = null;
+  const getOtherChatSchedules = async () => {
+    if (otherChatSchedules) return otherChatSchedules;
+    otherChatSchedules = await loadOtherConversationSchedules(capabilities.storage, input.chatId);
+    return otherChatSchedules;
+  };
+
+  for (const characterId of characterIds) {
+    const existing = existingSchedules[characterId];
+    if (existing && !input.forceRefresh && !scheduleNeedsRefresh(existing)) {
+      results[characterId] = { status: "fresh" };
+      continue;
+    }
+
+    if (!input.forceRefresh) {
+      const shared = (await getOtherChatSchedules()).get(characterId);
+      if (shared) {
+        const mergedShared = preserveTimingSettings(shared, existing);
+        newSchedules[characterId] = mergedShared;
+        await updateCharacterConversationStatus(capabilities.storage, characterId, mergedShared);
+        results[characterId] = { status: "shared", schedule: mergedShared };
+        continue;
+      }
+    }
+
+    const character = await capabilities.storage.get<JsonRecord>("characters", characterId);
+    if (!character) {
+      results[characterId] = { status: "not_found" };
+      continue;
+    }
+    const characterData = parseJsonObject(character.data);
+    if (parseJsonObject(characterData.extensions).isBuiltInAssistant === true) {
+      results[characterId] = { status: "skipped_assistant" };
+      continue;
+    }
+
+    try {
+      const recentContinuityContext = existing
+        ? buildScheduleContinuityContext({ meta, characterData, existingSchedule: existing })
+        : undefined;
+      const { schedule } = await generateCharacterSchedule(
+        provider,
+        model,
+        stringValue(characterData.name) || "Character",
+        stringValue(characterData.description),
+        stringValue(characterData.personality),
+        userSchedulePreferences,
+        recentContinuityContext,
+      );
+      const fullSchedule = preserveTimingSettings({ ...schedule, weekStart: mondayStr }, existing);
+      newSchedules[characterId] = fullSchedule;
+      await updateCharacterConversationStatus(capabilities.storage, characterId, fullSchedule, character, characterData);
+      results[characterId] = { status: "generated", schedule: fullSchedule };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Schedule generation failed";
+      results[characterId] = { status: `error: ${message}` };
+    }
+  }
+
+  if (Object.keys(newSchedules).length > 0) {
+    const freshChat = (await capabilities.storage.get<JsonRecord>("chats", input.chatId)) ?? chat;
+    const freshMeta = parseJsonObject(freshChat.metadata);
+    await capabilities.storage.request("PATCH", `/chats/${encodeURIComponent(input.chatId)}/metadata`, {
+      ...freshMeta,
+      conversationSchedulesEnabled: true,
+      characterSchedules: newSchedules,
+      scheduleWeekStart: mondayStr,
+    });
+    await syncGeneratedSchedulesToOtherChats(capabilities.storage, input.chatId, characterIds, results, newSchedules);
+  }
+
+  return { results, schedules: newSchedules };
+}
 
 // ── Schedule Generation ──
 
@@ -334,6 +449,293 @@ export function getMonday(date: Date = new Date()): Date {
   d.setDate(diff);
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function hasSchedules(value: unknown): value is CharacterSchedules {
+  return !!value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
+}
+
+function areConversationSchedulesEnabled(meta: JsonRecord): boolean {
+  return typeof meta.conversationSchedulesEnabled === "boolean"
+    ? meta.conversationSchedulesEnabled
+    : hasSchedules(meta.characterSchedules);
+}
+
+function getEnabledConversationSchedules(meta: JsonRecord): CharacterSchedules {
+  return areConversationSchedulesEnabled(meta) && hasSchedules(meta.characterSchedules) ? meta.characterSchedules : {};
+}
+
+function createScheduleProvider(
+  llm: LlmGateway,
+  connectionId: string,
+  maxTokensOverrideValue: number | null,
+): BaseLLMProvider {
+  return {
+    maxTokensOverrideValue,
+    async chatComplete(messages, options) {
+      const requestMessages: LlmMessage[] = messages.map(toLlmMessage);
+      const content = await llm.complete(requestMessages.length
+        ? {
+            connectionId,
+            model: options.model,
+            messages: requestMessages,
+            parameters: {
+              temperature: options.temperature,
+              maxTokens: options.maxTokens,
+            },
+          }
+        : {
+            connectionId,
+            model: options.model,
+            messages: [{ role: "user", content: "" }],
+            parameters: {
+              temperature: options.temperature,
+              maxTokens: options.maxTokens,
+            },
+          });
+      return { content };
+    },
+  };
+}
+
+function toLlmMessage(message: ChatMessage): LlmMessage {
+  const role =
+    message.role === "system" || message.role === "user" || message.role === "assistant" || message.role === "tool"
+      ? message.role
+      : "user";
+  return { role, content: String(message.content ?? ""), name: message.name };
+}
+
+async function resolveScheduleConnection(storage: StorageGateway, chatConnectionId: string): Promise<JsonRecord> {
+  const connections = await storage.list<JsonRecord>("connections");
+  if (chatConnectionId === "random") {
+    const pool = connections.filter((connection) => connection.useForRandom === true);
+    const selected = pool[Math.floor(Math.random() * pool.length)];
+    if (!selected) throw new Error("No connections marked for the random pool");
+    return selected;
+  }
+  if (chatConnectionId) {
+    const connection = await storage.get<JsonRecord>("connections", chatConnectionId);
+    if (!connection) throw new Error("Configured connection not found");
+    return connection;
+  }
+  const selected =
+    connections.find((connection) => connection.isDefault === true || connection.default === true) ?? connections[0];
+  if (!selected) throw new Error("No connection configured");
+  return selected;
+}
+
+async function loadOtherConversationSchedules(storage: StorageGateway, currentChatId: string): Promise<Map<string, WeekSchedule>> {
+  const schedules = new Map<string, WeekSchedule>();
+  const allChats = await storage.list<JsonRecord>("chats");
+  for (const chat of allChats) {
+    if (chat.id === currentChatId || chat.mode !== "conversation") continue;
+    const meta = parseJsonObject(chat.metadata);
+    if (!areConversationSchedulesEnabled(meta)) continue;
+    for (const [characterId, schedule] of Object.entries(getEnabledConversationSchedules(meta))) {
+      if (!schedules.has(characterId) && schedule && !scheduleNeedsRefresh(schedule)) {
+        schedules.set(characterId, schedule);
+      }
+    }
+  }
+  return schedules;
+}
+
+function preserveTimingSettings(schedule: WeekSchedule, existing?: WeekSchedule): WeekSchedule {
+  if (!existing) return schedule;
+  const merged: WeekSchedule = {
+    ...schedule,
+    inactivityThresholdMinutes: existing.inactivityThresholdMinutes,
+  };
+  if (typeof existing.idleResponseDelayMinutes === "number") {
+    merged.idleResponseDelayMinutes = existing.idleResponseDelayMinutes;
+  }
+  if (typeof existing.dndResponseDelayMinutes === "number") {
+    merged.dndResponseDelayMinutes = existing.dndResponseDelayMinutes;
+  }
+  return merged;
+}
+
+async function updateCharacterConversationStatus(
+  storage: StorageGateway,
+  characterId: string,
+  schedule: WeekSchedule,
+  loadedCharacter?: JsonRecord,
+  loadedCharacterData?: JsonRecord,
+): Promise<void> {
+  const character = loadedCharacter ?? (await storage.get<JsonRecord>("characters", characterId));
+  if (!character) return;
+  const characterData = loadedCharacterData ?? parseJsonObject(character.data);
+  const extensions = { ...parseJsonObject(characterData.extensions), conversationStatus: getCurrentStatus(schedule).status };
+  await storage.update("characters", characterId, {
+    data: {
+      ...characterData,
+      extensions,
+    },
+  });
+}
+
+async function syncGeneratedSchedulesToOtherChats(
+  storage: StorageGateway,
+  currentChatId: string,
+  requestedCharacterIds: string[],
+  results: Record<string, { status: string; schedule?: WeekSchedule }>,
+  newSchedules: CharacterSchedules,
+): Promise<void> {
+  const generatedCharacterIds = requestedCharacterIds.filter((id) => results[id]?.status === "generated");
+  if (generatedCharacterIds.length === 0) return;
+
+  const allChats = await storage.list<JsonRecord>("chats");
+  for (const chat of allChats) {
+    const chatId = stringValue(chat.id);
+    if (chatId === currentChatId || chat.mode !== "conversation") continue;
+    const chatCharacterIds = parseJsonArray<string>(chat.characterIds);
+    const overlap = generatedCharacterIds.filter((id) => chatCharacterIds.includes(id));
+    if (overlap.length === 0) continue;
+    const meta = parseJsonObject(chat.metadata);
+    if (!areConversationSchedulesEnabled(meta)) continue;
+    const chatSchedules = hasSchedules(meta.characterSchedules) ? { ...meta.characterSchedules } : {};
+    let changed = false;
+    for (const characterId of overlap) {
+      const schedule = newSchedules[characterId];
+      if (!schedule) continue;
+      chatSchedules[characterId] = preserveTimingSettings(schedule, chatSchedules[characterId]);
+      changed = true;
+    }
+    if (changed) {
+      await storage.request("PATCH", `/chats/${encodeURIComponent(chatId)}/metadata`, {
+        ...meta,
+        conversationSchedulesEnabled: true,
+        characterSchedules: chatSchedules,
+        scheduleWeekStart: getMonday().toISOString(),
+      });
+    }
+  }
+}
+
+type SummaryEntry = { summary: string; keyDetails: string[] };
+type CharacterMemoryEntry = { from?: string; summary?: string; createdAt?: string };
+
+function parseDateKeyMs(dateKey: string): number {
+  const match = dateKey.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (!match) return 0;
+  const [, day, month, year] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+}
+
+function coerceSummaryEntry(value: unknown): SummaryEntry | null {
+  if (typeof value === "string") {
+    const summary = value.trim();
+    return summary ? { summary, keyDetails: [] } : null;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as JsonRecord;
+  const summary = stringValue(record.summary).trim();
+  const keyDetails = parseJsonArray<string>(record.keyDetails).filter((detail) => detail.trim().length > 0);
+  return summary || keyDetails.length > 0 ? { summary, keyDetails } : null;
+}
+
+function getRecentSummaryEntries(raw: unknown, limit: number): Array<{ key: string; entry: SummaryEntry }> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  return Object.entries(raw as JsonRecord)
+    .map(([key, value]) => ({ key, entry: coerceSummaryEntry(value), time: parseDateKeyMs(key) }))
+    .filter((item): item is { key: string; entry: SummaryEntry; time: number } => !!item.entry)
+    .sort((a, b) => b.time - a.time)
+    .slice(0, limit)
+    .map(({ key, entry }) => ({ key, entry }));
+}
+
+function limitText(value: string, maxChars: number): string {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  return trimmed.length > maxChars ? `${trimmed.slice(0, maxChars - 1).trim()}...` : trimmed;
+}
+
+function formatSummaryEntry(label: string, entry: SummaryEntry): string[] {
+  const lines = [`- ${label}: ${limitText(entry.summary, 700)}`];
+  if (entry.keyDetails.length > 0) {
+    lines.push(`  Key details: ${entry.keyDetails.slice(0, 8).map((detail) => limitText(detail, 180)).join("; ")}`);
+  }
+  return lines;
+}
+
+function summarizePreviousSchedule(schedule: WeekSchedule): string[] {
+  return Object.entries(schedule.days)
+    .slice(0, 7)
+    .map(([day, blocks]) => {
+      const activities = blocks
+        .slice(0, 8)
+        .map((block) => `${block.time} ${block.activity} (${block.status})`)
+        .join("; ");
+      return `- ${day}: ${activities}`;
+    });
+}
+
+function buildScheduleContinuityContext(args: {
+  meta: JsonRecord;
+  characterData: JsonRecord;
+  existingSchedule: WeekSchedule;
+}): string {
+  const { meta, characterData, existingSchedule } = args;
+  const sections: string[] = [];
+
+  sections.push(`<previous_schedule weekStart="${existingSchedule.weekStart}">`);
+  sections.push(...summarizePreviousSchedule(existingSchedule));
+  sections.push(`</previous_schedule>`);
+
+  const weekSummaries = getRecentSummaryEntries(meta.weekSummaries, 2);
+  if (weekSummaries.length > 0) {
+    sections.push("", "<recent_week_summaries>");
+    for (const { key, entry } of weekSummaries) sections.push(...formatSummaryEntry(`Week of ${key}`, entry));
+    sections.push("</recent_week_summaries>");
+  }
+
+  const daySummaries = getRecentSummaryEntries(meta.daySummaries, 7);
+  if (daySummaries.length > 0) {
+    sections.push("", "<recent_day_summaries>");
+    for (const { key, entry } of daySummaries) sections.push(...formatSummaryEntry(key, entry));
+    sections.push("</recent_day_summaries>");
+  }
+
+  const rollingSummary = stringValue(meta.summary).trim();
+  if (rollingSummary) {
+    sections.push("", "<rolling_chat_summary>", limitText(rollingSummary, 1200), "</rolling_chat_summary>");
+  }
+
+  const memories = parseJsonArray<CharacterMemoryEntry>(parseJsonObject(characterData.extensions).characterMemories);
+  const previousScheduleStartMs = new Date(existingSchedule.weekStart).getTime();
+  const recentMemories = memories
+    .filter((memory) => typeof memory.summary === "string" && memory.summary.trim())
+    .filter((memory) => {
+      if (!Number.isFinite(previousScheduleStartMs) || !memory.createdAt) return true;
+      const memoryTime = new Date(memory.createdAt).getTime();
+      return !Number.isFinite(memoryTime) || memoryTime >= previousScheduleStartMs;
+    })
+    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+    .slice(0, 8);
+  if (recentMemories.length > 0) {
+    sections.push("", "<recent_character_memories>");
+    for (const memory of recentMemories) {
+      const date = memory.createdAt ? memory.createdAt.slice(0, 10) : "unknown date";
+      const from = memory.from ? ` from ${memory.from}` : "";
+      sections.push(`- ${date}${from}: ${limitText(memory.summary ?? "", 350)}`);
+    }
+    sections.push("</recent_character_memories>");
+  }
+
+  return sections.join("\n").slice(0, SCHEDULE_CONTINUITY_MAX_CHARS);
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function numberOrNull(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 /**

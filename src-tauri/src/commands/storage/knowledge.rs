@@ -1,5 +1,5 @@
-use super::*;
 use super::shared::*;
+use super::*;
 
 pub(crate) fn knowledge_meta_path(state: &AppState) -> std::path::PathBuf {
     state.data_dir.join("knowledge-sources").join("meta.json")
@@ -23,7 +23,12 @@ pub(crate) fn write_knowledge_meta(state: &AppState, meta: &Map<String, Value>) 
     Ok(())
 }
 
-pub(crate) fn knowledge_sources_call(state: &AppState, method: &str, rest: &[&str], body: Value) -> AppResult<Value> {
+pub(crate) fn knowledge_sources_call(
+    state: &AppState,
+    method: &str,
+    rest: &[&str],
+    body: Value,
+) -> AppResult<Value> {
     let dir = state.data_dir.join("knowledge-sources");
     fs::create_dir_all(&dir)?;
     match (method, rest) {
@@ -43,9 +48,14 @@ pub(crate) fn knowledge_sources_call(state: &AppState, method: &str, rest: &[&st
                 .extension()
                 .map(|ext| format!(".{}", ext.to_string_lossy().to_ascii_lowercase()))
                 .unwrap_or_default();
-            let allowed = [".txt", ".md", ".csv", ".json", ".xml", ".html", ".htm", ".log", ".yaml", ".yml", ".tsv", ".pdf"];
+            let allowed = [
+                ".txt", ".md", ".csv", ".json", ".xml", ".html", ".htm", ".log", ".yaml", ".yml",
+                ".tsv", ".pdf",
+            ];
             if !allowed.contains(&ext.as_str()) {
-                return Err(AppError::invalid_input(format!("Unsupported knowledge source type: {ext}")));
+                return Err(AppError::invalid_input(format!(
+                    "Unsupported knowledge source type: {ext}"
+                )));
             }
             let id = new_id();
             let filename = format!("{id}{ext}");
@@ -76,14 +86,38 @@ pub(crate) fn knowledge_sources_call(state: &AppState, method: &str, rest: &[&st
         }
         ("GET", [id, "text"]) => {
             let meta = read_knowledge_meta(state)?;
-            let entry = meta.get(*id).ok_or_else(|| AppError::not_found("Knowledge source not found"))?;
+            let entry = meta
+                .get(*id)
+                .ok_or_else(|| AppError::not_found("Knowledge source not found"))?;
             let filename = entry
                 .get("filename")
                 .and_then(Value::as_str)
                 .ok_or_else(|| AppError::not_found("Knowledge source file missing"))?;
-            let text = fs::read_to_string(dir.join(filename)).unwrap_or_else(|_| "[Binary or PDF text extraction unavailable]".to_string());
-            Ok(json!({ "id": id, "originalName": entry.get("originalName").cloned().unwrap_or(Value::Null), "text": text }))
+            let text = extract_file_text(&dir.join(filename))?;
+            Ok(
+                json!({ "id": id, "originalName": entry.get("originalName").cloned().unwrap_or(Value::Null), "text": text }),
+            )
         }
-        _ => Err(AppError::new("route_not_found", format!("knowledge-sources route {method} /{} is not implemented", rest.join("/")))),
+        _ => Err(AppError::new(
+            "route_not_found",
+            format!("Unknown knowledge-sources route: {method} /{}", rest.join("/")),
+        )),
     }
+}
+
+fn extract_file_text(path: &std::path::Path) -> AppResult<String> {
+    let ext = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+
+    if ext == "pdf" {
+        return Ok(pdf_extract::extract_text(path)
+            .unwrap_or_else(|_| "[PDF text extraction failed]".to_string()));
+    }
+
+    let bytes = fs::read(path)?;
+    Ok(String::from_utf8(bytes)
+        .unwrap_or_else(|err| String::from_utf8_lossy(err.as_bytes()).into_owned()))
 }

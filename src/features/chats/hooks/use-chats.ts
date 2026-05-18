@@ -2,10 +2,12 @@
 // React Query: Chat hooks
 // ──────────────────────────────────────────────
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { previewGenerationPrompt } from "../../../engine/generation";
+import { storageApi } from "../../../shared/api/storage-api";
 import { api } from "../../../shared/lib/api-client";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useAgentStore } from "../../../shared/stores/agent.store";
-import { useGameStateStore } from "../../game/stores/game-state.store";
+import { useGameStateStore } from "../../world-state/stores/world-state.store";
 import { useEncounterStore } from "../../../shared/stores/encounter.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { clearBrowserRuntimeCaches } from "../../../shared/lib/browser-runtime";
@@ -692,7 +694,7 @@ function formatChatText(messages: Message[]) {
 export function usePeekPrompt() {
   return useMutation({
     mutationFn: (chatId: string) =>
-      api.post<{
+      previewGenerationPrompt(storageApi, { chatId }) as Promise<{
         messages: Array<{ role: string; content: string }>;
         parameters: unknown;
         generationInfo: {
@@ -711,7 +713,7 @@ export function usePeekPrompt() {
           durationMs?: number | null;
           finishReason?: string | null;
         } | null;
-      }>(`/chats/${chatId}/peek-prompt`, {}),
+      }>,
   });
 }
 

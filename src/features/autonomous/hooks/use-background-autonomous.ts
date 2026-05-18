@@ -10,6 +10,9 @@ import type { Chat } from "@marinara-engine/shared";
 import type { AvatarCropValue } from "../../../shared/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { startGeneration } from "../../../engine/generation";
+import { llmApi } from "../../../shared/api/llm-api";
+import { storageApi } from "../../../shared/api/storage-api";
 import { api } from "../../../shared/lib/api-client";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
@@ -138,8 +141,8 @@ export function useBackgroundAutonomousPolling() {
                   return;
                 }
 
-                // Use streamEvents to drain the SSE — tokens aren't needed for background chats
-                for await (const _event of api.streamEvents("/generate", {
+                // Drain the TS generation engine; tokens aren't displayed for background chats.
+                for await (const _event of startGeneration({ storage: storageApi, llm: llmApi }, {
                   chatId: chat.id,
                   connectionId: null,
                   streaming: useUIStore.getState().enableStreaming,

@@ -1,5 +1,6 @@
-use super::super::*;
+use super::super::images::percent_encode_component;
 use super::super::shared::*;
+use super::super::*;
 
 const TTS_SETTINGS_KEY: &str = "tts";
 const TTS_API_KEY_MASK: &str = "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}";
@@ -34,14 +35,60 @@ const POCKET_TTS_VOICES: &[&str] = &[
 ];
 
 const NANOGPT_ELEVENLABS_VOICES: &[&str] = &[
-    "Adam", "Alice", "Antoni", "Aria", "Arnold", "Bella", "Bill", "Brian", "Callum", "Charlie",
-    "Charlotte", "Chris", "Daniel", "Domi", "Dorothy", "Drew", "Elli", "Emily", "Eric", "Ethan",
-    "Fin", "Freya", "George", "Gigi", "Giovanni", "Grace", "James", "Jeremy", "Jessica", "Joseph",
-    "Josh", "Laura", "Liam", "Lily", "Matilda", "Matthew", "Michael", "Nicole", "Rachel", "River",
-    "Roger", "Ryan", "Sam", "Sarah", "Thomas", "Will",
+    "Adam",
+    "Alice",
+    "Antoni",
+    "Aria",
+    "Arnold",
+    "Bella",
+    "Bill",
+    "Brian",
+    "Callum",
+    "Charlie",
+    "Charlotte",
+    "Chris",
+    "Daniel",
+    "Domi",
+    "Dorothy",
+    "Drew",
+    "Elli",
+    "Emily",
+    "Eric",
+    "Ethan",
+    "Fin",
+    "Freya",
+    "George",
+    "Gigi",
+    "Giovanni",
+    "Grace",
+    "James",
+    "Jeremy",
+    "Jessica",
+    "Joseph",
+    "Josh",
+    "Laura",
+    "Liam",
+    "Lily",
+    "Matilda",
+    "Matthew",
+    "Michael",
+    "Nicole",
+    "Rachel",
+    "River",
+    "Roger",
+    "Ryan",
+    "Sam",
+    "Sarah",
+    "Thomas",
+    "Will",
 ];
 
-pub(crate) async fn tts_call(state: &AppState, method: &str, rest: &[&str], body: Value) -> AppResult<Value> {
+pub(crate) async fn tts_call(
+    state: &AppState,
+    method: &str,
+    rest: &[&str],
+    body: Value,
+) -> AppResult<Value> {
     match (method, rest) {
         ("GET", ["config"]) => get_config(state),
         ("PUT", ["config"]) => put_config(state, body),
@@ -49,7 +96,7 @@ pub(crate) async fn tts_call(state: &AppState, method: &str, rest: &[&str], body
         ("POST", ["speak"]) => speak(state, body).await,
         _ => Err(AppError::new(
             "route_not_found",
-            format!("tts route {method} /{} is not implemented", rest.join("/")),
+            format!("Unknown tts route: {method} /{}", rest.join("/")),
         )),
     }
 }
@@ -101,7 +148,11 @@ fn load_config(state: &AppState) -> AppResult<Value> {
 
 fn get_config(state: &AppState) -> AppResult<Value> {
     let mut config = load_config(state)?;
-    if config.get("apiKey").and_then(Value::as_str).is_some_and(|key| !key.is_empty()) {
+    if config
+        .get("apiKey")
+        .and_then(Value::as_str)
+        .is_some_and(|key| !key.is_empty())
+    {
         config["apiKey"] = Value::String(TTS_API_KEY_MASK.to_string());
     }
     Ok(config)
@@ -111,7 +162,10 @@ fn put_config(state: &AppState, body: Value) -> AppResult<Value> {
     let mut config = config_with_defaults(body);
     if config.get("apiKey").and_then(Value::as_str) == Some(TTS_API_KEY_MASK) {
         let existing = load_config(state)?;
-        config["apiKey"] = existing.get("apiKey").cloned().unwrap_or_else(|| Value::String(String::new()));
+        config["apiKey"] = existing
+            .get("apiKey")
+            .cloned()
+            .unwrap_or_else(|| Value::String(String::new()));
     }
     state
         .storage
@@ -121,13 +175,25 @@ fn put_config(state: &AppState, body: Value) -> AppResult<Value> {
 
 async fn voices(state: &AppState) -> AppResult<Value> {
     let config = load_config(state)?;
-    let source = config.get("source").and_then(Value::as_str).unwrap_or("openai");
-    if !config.get("enabled").and_then(Value::as_bool).unwrap_or(false) {
+    let source = config
+        .get("source")
+        .and_then(Value::as_str)
+        .unwrap_or("openai");
+    if !config
+        .get("enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
         return Ok(fallback_voices(source));
     }
     let base = configured_base_url(&config);
     if source == "elevenlabs" && is_nano_gpt_base_url(&base) {
-        return Ok(voice_options_response(source, NANOGPT_ELEVENLABS_VOICES, Some("NanoGPT ElevenLabs"), true));
+        return Ok(voice_options_response(
+            source,
+            NANOGPT_ELEVENLABS_VOICES,
+            Some("NanoGPT ElevenLabs"),
+            true,
+        ));
     }
     if source == "elevenlabs" {
         return elevenlabs_voices(&config, &base)
@@ -148,12 +214,17 @@ async fn voices(state: &AppState) -> AppResult<Value> {
         .await;
     match response {
         Ok(response) if response.status().is_success() => {
-            let data = response.json::<Value>().await.unwrap_or_else(|_| Value::Null);
+            let data = response
+                .json::<Value>()
+                .await
+                .unwrap_or_else(|_| Value::Null);
             let parsed = parse_voice_options(&data);
             if parsed.is_empty() {
                 Ok(fallback_voices(source))
             } else {
-                Ok(json!({ "voices": parsed.iter().filter_map(|voice| voice.get("id").cloned()).collect::<Vec<_>>(), "voiceOptions": parsed, "fromProvider": true, "source": source }))
+                Ok(
+                    json!({ "voices": parsed.iter().filter_map(|voice| voice.get("id").cloned()).collect::<Vec<_>>(), "voiceOptions": parsed, "fromProvider": true, "source": source }),
+                )
             }
         }
         _ => Ok(fallback_voices(source)),
@@ -166,27 +237,47 @@ async fn speak(state: &AppState, body: Value) -> AppResult<Value> {
         return Err(AppError::invalid_input("TTS text is too long"));
     }
     let config = load_config(state)?;
-    if !config.get("enabled").and_then(Value::as_bool).unwrap_or(false) {
+    if !config
+        .get("enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
         return Err(AppError::invalid_input("TTS is not enabled"));
     }
-    let source = config.get("source").and_then(Value::as_str).unwrap_or("openai");
+    let source = config
+        .get("source")
+        .and_then(Value::as_str)
+        .unwrap_or("openai");
     let base = configured_base_url(&config);
     let api_key = config.get("apiKey").and_then(Value::as_str).unwrap_or("");
-    let configured_voice = config.get("voice").and_then(Value::as_str).unwrap_or("alloy");
+    let configured_voice = config
+        .get("voice")
+        .and_then(Value::as_str)
+        .unwrap_or("alloy");
     let voice = body
         .get("voice")
         .and_then(Value::as_str)
         .filter(|voice| !voice.trim().is_empty())
         .unwrap_or(configured_voice);
     if source == "elevenlabs" && api_key.is_empty() {
-        return Err(AppError::invalid_input("ElevenLabs API key is not configured"));
+        return Err(AppError::invalid_input(
+            "ElevenLabs API key is not configured",
+        ));
     }
     if source == "elevenlabs" && voice.trim().is_empty() {
         return Err(AppError::invalid_input("ElevenLabs voice is not selected"));
     }
 
-    let model = normalized_model(source, &base, config.get("model").and_then(Value::as_str).unwrap_or(""));
-    let speed = config.get("speed").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.25, 4.0);
+    let model = normalized_model(
+        source,
+        &base,
+        config.get("model").and_then(Value::as_str).unwrap_or(""),
+    );
+    let speed = config
+        .get("speed")
+        .and_then(Value::as_f64)
+        .unwrap_or(1.0)
+        .clamp(0.25, 4.0);
     let tone = body.get("tone").and_then(Value::as_str);
     let speaker = body.get("speaker").and_then(Value::as_str);
     let use_nano_gpt = is_nano_gpt_base_url(&base);
@@ -195,7 +286,11 @@ async fn speak(state: &AppState, body: Value) -> AppResult<Value> {
     } else if source == "pockettts" {
         format!("{base}/tts")
     } else if source == "elevenlabs" {
-        format!("{}/v1/text-to-speech/{}?output_format=mp3_44100_128", elevenlabs_api_root(&base), percent_encode_component(voice))
+        format!(
+            "{}/v1/text-to-speech/{}?output_format=mp3_44100_128",
+            elevenlabs_api_root(&base),
+            percent_encode_component(voice)
+        )
     } else {
         format!("{base}/audio/speech")
     };
@@ -210,10 +305,19 @@ async fn speak(state: &AppState, body: Value) -> AppResult<Value> {
         text.to_string()
     };
     let request = if source == "pockettts" {
-        let form = reqwest::multipart::Form::new().text("text", provider_text).text("voice_url", voice.to_string());
-        client.post(url).headers(optional_bearer_headers(api_key)?).multipart(form)
+        let form = reqwest::multipart::Form::new()
+            .text("text", provider_text)
+            .text("voice_url", voice.to_string());
+        client
+            .post(url)
+            .headers(optional_bearer_headers(api_key)?)
+            .multipart(form)
     } else if source == "elevenlabs" && !use_nano_gpt {
-        let language = config.get("elevenLabsLanguageCode").and_then(Value::as_str).unwrap_or("").trim();
+        let language = config
+            .get("elevenLabsLanguageCode")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
         let mut payload = json!({
             "text": provider_text,
             "model_id": model,
@@ -225,7 +329,10 @@ async fn speak(state: &AppState, body: Value) -> AppResult<Value> {
         if !language.is_empty() {
             payload["language_code"] = json!(language);
         }
-        client.post(url).headers(elevenlabs_headers(api_key)?).json(&payload)
+        client
+            .post(url)
+            .headers(elevenlabs_headers(api_key)?)
+            .json(&payload)
     } else {
         let instructions = build_speech_instructions(speaker, tone);
         let mut payload = json!({
@@ -238,7 +345,11 @@ async fn speak(state: &AppState, body: Value) -> AppResult<Value> {
         if let Some(instructions) = instructions {
             payload["instructions"] = json!(instructions);
         }
-        let headers = if use_nano_gpt { nano_gpt_headers(api_key)? } else { openai_headers(api_key)? };
+        let headers = if use_nano_gpt {
+            nano_gpt_headers(api_key)?
+        } else {
+            openai_headers(api_key)?
+        };
         client.post(url).headers(headers).json(&payload)
     };
 
@@ -258,7 +369,10 @@ async fn speak(state: &AppState, body: Value) -> AppResult<Value> {
         .await
         .map_err(|error| AppError::new("tts_response_error", error.to_string()))?;
     if !status.is_success() {
-        let detail = String::from_utf8_lossy(&bytes).chars().take(500).collect::<String>();
+        let detail = String::from_utf8_lossy(&bytes)
+            .chars()
+            .take(500)
+            .collect::<String>();
         return Err(AppError::with_details(
             "tts_provider_error",
             format!("TTS provider returned HTTP {status}"),
@@ -266,7 +380,10 @@ async fn speak(state: &AppState, body: Value) -> AppResult<Value> {
         ));
     }
     if !is_allowed_audio_content_type(&content_type) {
-        let detail = String::from_utf8_lossy(&bytes).chars().take(500).collect::<String>();
+        let detail = String::from_utf8_lossy(&bytes)
+            .chars()
+            .take(500)
+            .collect::<String>();
         return Err(AppError::with_details(
             "tts_provider_error",
             "TTS provider returned a non-audio response",
@@ -283,8 +400,16 @@ async fn speak(state: &AppState, body: Value) -> AppResult<Value> {
 }
 
 fn configured_base_url(config: &Value) -> String {
-    let source = config.get("source").and_then(Value::as_str).unwrap_or("openai");
-    let configured = config.get("baseUrl").and_then(Value::as_str).unwrap_or("").trim().trim_end_matches('/');
+    let source = config
+        .get("source")
+        .and_then(Value::as_str)
+        .unwrap_or("openai");
+    let configured = config
+        .get("baseUrl")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .trim_end_matches('/');
     if !configured.is_empty() {
         return configured.to_string();
     }
@@ -305,7 +430,9 @@ fn normalized_model(source: &str, base: &str, configured: &str) -> String {
     let model = if model.is_empty() { fallback } else { model };
     if is_nano_gpt_base_url(base) {
         match model.to_ascii_lowercase().as_str() {
-            "eleven_v3" | "elevenlabs-v3" | "elevenlabs_v3" | "elevenlabs_tts_v3" => "Elevenlabs-V3".to_string(),
+            "eleven_v3" | "elevenlabs-v3" | "elevenlabs_v3" | "elevenlabs_tts_v3" => {
+                "Elevenlabs-V3".to_string()
+            }
             "eleven_turbo_v2_5" | "eleven_flash_v2_5" => "Elevenlabs-Turbo-V2.5".to_string(),
             _ => model.to_string(),
         }
@@ -322,12 +449,19 @@ fn normalized_model(source: &str, base: &str, configured: &str) -> String {
 fn fallback_voices(source: &str) -> Value {
     match source {
         "elevenlabs" => voice_options_response(source, &[], None, false),
-        "pockettts" => voice_options_response(source, POCKET_TTS_VOICES, Some("PocketTTS built-in"), false),
+        "pockettts" => {
+            voice_options_response(source, POCKET_TTS_VOICES, Some("PocketTTS built-in"), false)
+        }
         _ => voice_options_response(source, OPENAI_FALLBACK_VOICES, None, false),
     }
 }
 
-fn voice_options_response(source: &str, voices: &[&str], category: Option<&str>, from_provider: bool) -> Value {
+fn voice_options_response(
+    source: &str,
+    voices: &[&str],
+    category: Option<&str>,
+    from_provider: bool,
+) -> Value {
     let options = voices
         .iter()
         .map(|voice| {
@@ -352,7 +486,10 @@ async fn elevenlabs_voices(config: &Value, base: &str) -> AppResult<Value> {
     if api_key.is_empty() {
         return Ok(fallback_voices("elevenlabs"));
     }
-    let url = format!("{}/v2/voices?page_size=100&include_total_count=false", elevenlabs_api_root(base));
+    let url = format!(
+        "{}/v2/voices?page_size=100&include_total_count=false",
+        elevenlabs_api_root(base)
+    );
     let response = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
@@ -365,12 +502,17 @@ async fn elevenlabs_voices(config: &Value, base: &str) -> AppResult<Value> {
     if !response.status().is_success() {
         return Ok(fallback_voices("elevenlabs"));
     }
-    let data = response.json::<Value>().await.unwrap_or_else(|_| Value::Null);
+    let data = response
+        .json::<Value>()
+        .await
+        .unwrap_or_else(|_| Value::Null);
     let parsed = parse_voice_options(&data);
     if parsed.is_empty() {
         Ok(fallback_voices("elevenlabs"))
     } else {
-        Ok(json!({ "voices": parsed.iter().filter_map(|voice| voice.get("id").cloned()).collect::<Vec<_>>(), "voiceOptions": parsed, "fromProvider": true, "source": "elevenlabs" }))
+        Ok(
+            json!({ "voices": parsed.iter().filter_map(|voice| voice.get("id").cloned()).collect::<Vec<_>>(), "voiceOptions": parsed, "fromProvider": true, "source": "elevenlabs" }),
+        )
     }
 }
 
@@ -423,7 +565,10 @@ fn strip_version_suffix(base: &str) -> String {
     let trimmed = base.trim_end_matches('/');
     let lower = trimmed.to_ascii_lowercase();
     if lower.ends_with("/v1") || lower.ends_with("/v2") || lower.ends_with("/v3") {
-        trimmed.rsplit_once('/').map(|(root, _)| root.to_string()).unwrap_or_else(|| trimmed.to_string())
+        trimmed
+            .rsplit_once('/')
+            .map(|(root, _)| root.to_string())
+            .unwrap_or_else(|| trimmed.to_string())
     } else {
         trimmed.to_string()
     }
@@ -439,7 +584,11 @@ fn build_speech_instructions(speaker: Option<&str>, tone: Option<&str>) -> Optio
         parts.push(format!("Voice the line as {speaker}."));
     }
     if let Some(tone) = tone.map(str::trim).filter(|value| !value.is_empty()) {
-        let article = if tone.chars().next().is_some_and(|ch| "aeiouAEIOU".contains(ch)) {
+        let article = if tone
+            .chars()
+            .next()
+            .is_some_and(|ch| "aeiouAEIOU".contains(ch))
+        {
             "an"
         } else {
             "a"
@@ -449,7 +598,9 @@ fn build_speech_instructions(speaker: Option<&str>, tone: Option<&str>) -> Optio
     if parts.is_empty() {
         None
     } else {
-        parts.push("Do not read speaker names, brackets, markup, or stage directions aloud.".to_string());
+        parts.push(
+            "Do not read speaker names, brackets, markup, or stage directions aloud.".to_string(),
+        );
         Some(parts.join(" "))
     }
 }
@@ -469,7 +620,11 @@ fn build_elevenlabs_text_input(text: &str, tone: Option<&str>) -> String {
                 return None;
             }
             let normalized = tag.to_ascii_lowercase();
-            if matches!(normalized.as_str(), "main" | "side" | "extra" | "action" | "thought") || normalized.starts_with("whisper") {
+            if matches!(
+                normalized.as_str(),
+                "main" | "side" | "extra" | "action" | "thought"
+            ) || normalized.starts_with("whisper")
+            {
                 return None;
             }
             Some(format!("[{tag}]"))
@@ -489,7 +644,10 @@ fn is_allowed_audio_content_type(content_type: &str) -> bool {
 
 fn openai_headers(api_key: &str) -> AppResult<reqwest::header::HeaderMap> {
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(reqwest::header::CONTENT_TYPE, reqwest::header::HeaderValue::from_static("application/json"));
+    headers.insert(
+        reqwest::header::CONTENT_TYPE,
+        reqwest::header::HeaderValue::from_static("application/json"),
+    );
     if !api_key.trim().is_empty() {
         headers.insert(
             reqwest::header::AUTHORIZATION,
@@ -502,11 +660,15 @@ fn openai_headers(api_key: &str) -> AppResult<reqwest::header::HeaderMap> {
 
 fn elevenlabs_headers(api_key: &str) -> AppResult<reqwest::header::HeaderMap> {
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(reqwest::header::CONTENT_TYPE, reqwest::header::HeaderValue::from_static("application/json"));
+    headers.insert(
+        reqwest::header::CONTENT_TYPE,
+        reqwest::header::HeaderValue::from_static("application/json"),
+    );
     if !api_key.trim().is_empty() {
         headers.insert(
             "xi-api-key",
-            reqwest::header::HeaderValue::from_str(api_key.trim()).map_err(|error| AppError::invalid_input(error.to_string()))?,
+            reqwest::header::HeaderValue::from_str(api_key.trim())
+                .map_err(|error| AppError::invalid_input(error.to_string()))?,
         );
     }
     Ok(headers)
@@ -517,7 +679,8 @@ fn nano_gpt_headers(api_key: &str) -> AppResult<reqwest::header::HeaderMap> {
     if !api_key.trim().is_empty() {
         headers.insert(
             "x-api-key",
-            reqwest::header::HeaderValue::from_str(api_key.trim()).map_err(|error| AppError::invalid_input(error.to_string()))?,
+            reqwest::header::HeaderValue::from_str(api_key.trim())
+                .map_err(|error| AppError::invalid_input(error.to_string()))?,
         );
     }
     Ok(headers)

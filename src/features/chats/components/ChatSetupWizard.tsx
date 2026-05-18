@@ -30,6 +30,9 @@ import { useChatPresets, useApplyChatPreset } from "../../chat-presets/hooks/use
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { api } from "../../../shared/lib/api-client";
+import { generateConversationSchedules } from "../../../engine/modes/chat/schedules/schedule.service";
+import { llmApi } from "../../../shared/api/llm-api";
+import { storageApi } from "../../../shared/api/storage-api";
 import { filterLanguageGenerationConnections } from "../../../shared/lib/connection-filters";
 import { getCharacterTitle, parseCharacterDisplayData } from "../../../shared/lib/character-display";
 import { ChoiceSelectionModal } from "../../presets/components/ChoiceSelectionModal";
@@ -465,7 +468,7 @@ function ConversationQuickSetup({ chat, onFinish }: ChatSetupWizardProps) {
       setScheduleState("generating");
       try {
         const scheduleGenerationPreferences = useUIStore.getState().scheduleGenerationPreferences;
-        await api.post("/conversation/schedule/generate", {
+        await generateConversationSchedules({ storage: storageApi, llm: llmApi }, {
           chatId: chat.id,
           characterIds: chatCharIds,
           scheduleGenerationPreferences,

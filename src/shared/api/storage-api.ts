@@ -32,6 +32,12 @@ export const storageApi: StorageGateway = {
       path: `/${entity}/${encodeURIComponent(id)}`,
       body: null,
     }),
+  request: (method, operation, payload?: unknown) =>
+    invokeTauri("api_request", {
+      method,
+      path: operation.startsWith("/") ? operation : `/${operation}`,
+      body: payload ?? null,
+    }),
   call: (operation: string, payload?: unknown) =>
     invokeTauri("api_request", {
       method: "POST",

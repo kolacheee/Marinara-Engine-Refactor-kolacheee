@@ -12,6 +12,9 @@ import { Loader2, Wand2, CheckCircle, AlertCircle, ChevronDown, BookOpen, Plus }
 import { api } from "../../../shared/lib/api-client";
 import type { Lorebook } from "@marinara-engine/shared";
 import { ProfessorMariWorkingWindow } from "../../../shared/components/ui/ProfessorMariWorkingWindow";
+import { generateLorebookMaker } from "../../../engine/generation";
+import { llmApi } from "../../../shared/api/llm-api";
+import { storageApi } from "../../../shared/api/storage-api";
 
 interface Props {
   open: boolean;
@@ -89,19 +92,17 @@ export function LorebookMakerModal({ open, onClose }: Props) {
     try {
       let fullText = "";
       let finalData: GeneratedData | null = null;
-      const body: Record<string, unknown> = {
-        prompt,
-        connectionId,
-        entryCount,
-        streaming: enableStreaming,
-      };
-
-      // If targeting existing lorebook, pass the ID so server auto-saves entries
-      if (targetLorebookId !== "__new__") {
-        body.lorebookId = targetLorebookId;
-      }
-
-      for await (const event of api.streamEvents("/lorebook-maker/generate", body, abort.signal)) {
+      for await (const event of generateLorebookMaker(
+        { llm: llmApi, storage: storageApi },
+        {
+          prompt,
+          connectionId,
+          entryCount,
+          streaming: enableStreaming,
+          ...(targetLorebookId !== "__new__" ? { lorebookId: targetLorebookId } : {}),
+        },
+        abort.signal,
+      )) {
         switch (event.type) {
           case "token":
             fullText += event.data as string;

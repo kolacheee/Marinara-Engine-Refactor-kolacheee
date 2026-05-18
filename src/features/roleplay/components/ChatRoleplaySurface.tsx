@@ -30,22 +30,22 @@ import { getConnectedChatDisplayName } from "../../../shared/lib/chat-display";
 import { resolveManagedLocalAssetUrl } from "../../../shared/api/local-file-api";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
-import { useGameStateStore } from "../../game/stores/game-state.store";
-import { ChatMessage } from "./ChatMessage";
-import { ChatInput } from "./ChatInput";
+import { useGameStateStore } from "../../world-state/stores/world-state.store";
+import { ChatMessage } from "../../chats/components/ChatMessage";
+import { ChatInput } from "../../chats/components/ChatInput";
 import { CyoaChoices } from "./CyoaChoices";
-import { ChatBranchSelector } from "./ChatBranchSelector";
+import { ChatBranchSelector } from "../../chats/components/ChatBranchSelector";
 import { EndSceneBar } from "./SceneBanner";
-import { ChatCommonOverlays } from "./ChatCommonOverlays";
-import { ActiveWorldInfoButton } from "./ActiveWorldInfoButton";
-import type { SpriteDisplayMode } from "./sprite-display-modes";
+import { ChatCommonOverlays } from "../../chats/components/ChatCommonOverlays";
+import { ActiveWorldInfoButton } from "../../visuals/components/ActiveWorldInfoButton";
+import type { SpriteDisplayMode } from "../../visuals/components/sprite-display-modes";
 import type {
   CharacterMap,
   MessageSelectionToggle,
   MessageWithSwipes,
   PeekPromptData,
   PersonaInfo,
-} from "./chat-area.types";
+} from "../../chats/components/chat-area.types";
 
 type ChatData = ComponentProps<typeof ChatCommonOverlays>["chat"];
 
@@ -55,17 +55,17 @@ const RoleplayHUD = lazy(async () => {
 });
 
 const WeatherEffects = lazy(async () => {
-  const module = await import("./WeatherEffects");
+  const module = await import("../../visuals/components/WeatherEffects");
   return { default: module.WeatherEffects };
 });
 
 const SpriteOverlay = lazy(async () => {
-  const module = await import("./SpriteOverlay");
+  const module = await import("../../visuals/components/SpriteOverlay");
   return { default: module.SpriteOverlay };
 });
 
 const EchoChamberPanel = lazy(async () => {
-  const module = await import("./EchoChamberPanel");
+  const module = await import("../../chats/components/EchoChamberPanel");
   return { default: module.EchoChamberPanel };
 });
 
@@ -75,7 +75,7 @@ const EncounterModal = lazy(async () => {
 });
 
 const SummaryPopover = lazy(async () => {
-  const module = await import("./SummaryPopover");
+  const module = await import("../../chats/components/SummaryPopover");
   return { default: module.SummaryPopover };
 });
 

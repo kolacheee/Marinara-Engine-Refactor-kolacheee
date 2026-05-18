@@ -1,6 +1,9 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { startGeneration } from "../../../engine/generation";
+import { llmApi } from "../../../shared/api/llm-api";
+import { storageApi } from "../../../shared/api/storage-api";
 import { api, ApiError } from "../../../shared/lib/api-client";
 import { useAgentStore } from "../../../shared/stores/agent.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
@@ -11,6 +14,8 @@ type GenerateArgs = {
   message?: string;
   [key: string]: unknown;
 };
+
+type StreamEvent = { type: string; data?: unknown };
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -35,7 +40,11 @@ export function useGenerate() {
 
       let received = "";
       try {
-        for await (const event of api.streamEvents("/generate", args, controller.signal)) {
+        for await (const event of startGeneration(
+          { storage: storageApi, llm: llmApi },
+          args,
+          controller.signal,
+        ) as AsyncGenerator<StreamEvent>) {
           switch (event.type) {
             case "phase":
               if (typeof event.data === "string") {

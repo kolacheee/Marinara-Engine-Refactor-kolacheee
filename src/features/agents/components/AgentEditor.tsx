@@ -817,7 +817,7 @@ export function AgentEditor() {
             </select>
             <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
               {localConnectionId === LOCAL_SIDECAR_CONNECTION_ID
-                ? "Uses the built-in Local Model from the Connections panel. The sidecar will start on demand when this agent runs."
+                ? "The local sidecar connection is deferred in the Tauri build. Choose a configured connection for this agent."
                 : "When empty, uses the agent default connection if one is set, otherwise falls back to the chat's active connection."}
             </p>
           </FieldGroup>

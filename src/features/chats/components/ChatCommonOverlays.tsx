@@ -1,7 +1,7 @@
 import { Suspense, lazy, type ComponentProps } from "react";
 import type { SpriteSide } from "@marinara-engine/shared";
 import { ChevronUp, ChevronDown, Trash2 } from "lucide-react";
-import { PinnedImageOverlay } from "./PinnedImageOverlay";
+import { PinnedImageOverlay } from "../../visuals/components/PinnedImageOverlay";
 import type { PeekPromptData } from "./chat-area.types";
 
 const ChatSettingsDrawer = lazy(async () => {

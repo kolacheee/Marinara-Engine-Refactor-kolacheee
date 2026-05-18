@@ -100,15 +100,6 @@ export const knowledgeSourcesApi = {
   },
 };
 
-export const promptReviewerApi = {
-  reviewEvents: (input: {
-    presetId: string;
-    connectionId: string;
-    streaming: boolean;
-    focusAreas: string[];
-  }) => api.streamEvents("/prompt-reviewer/review", input),
-};
-
 export const connectionsUtilityApi = {
   list: <T = unknown>() => api.get<T>("/connections"),
 };

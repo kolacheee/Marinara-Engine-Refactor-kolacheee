@@ -61,7 +61,10 @@ import { cn } from "../../../shared/lib/utils";
 import { HelpTooltip } from "../../../shared/components/ui/HelpTooltip";
 import { DraftNumberInput } from "../../../shared/components/ui/DraftNumberInput";
 import { api } from "../../../shared/lib/api-client";
-import { connectionsUtilityApi, promptReviewerApi } from "../../../shared/api/integration-utility-api";
+import { connectionsUtilityApi } from "../../../shared/api/integration-utility-api";
+import { reviewPromptPreset } from "../../../engine/generation";
+import { llmApi } from "../../../shared/api/llm-api";
+import { storageApi } from "../../../shared/api/storage-api";
 import { useAgentConfigs, type AgentConfigRow } from "../../agents/hooks/use-agents";
 import { SUPPORTED_MACROS, type WrapFormat, type MarkerType } from "@marinara-engine/shared";
 
@@ -2337,7 +2340,6 @@ function ReviewTab({ presetId }: { presetId: string }) {
   const [reviewing, setReviewing] = useState(false);
   const [reviewOutput, setReviewOutput] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const enableStreaming = useUIStore((s) => s.enableStreaming);
 
   const startReview = async (connectionId: string) => {
     setReviewing(true);
@@ -2345,12 +2347,14 @@ function ReviewTab({ presetId }: { presetId: string }) {
     setError(null);
 
     try {
-      for await (const event of promptReviewerApi.reviewEvents({
-        presetId,
-        connectionId,
-        streaming: enableStreaming,
-        focusAreas: ["clarity", "consistency", "coverage", "token_efficiency"],
-      })) {
+      for await (const event of reviewPromptPreset(
+        { storage: storageApi, llm: llmApi },
+        {
+          presetId,
+          connectionId,
+          focusAreas: ["clarity", "consistency", "coverage", "token_efficiency"],
+        },
+      )) {
         if (event.type === "token") {
           setReviewOutput((prev) => prev + String(event.data ?? ""));
         } else if (event.type === "error") {

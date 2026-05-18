@@ -38,5 +38,6 @@ export interface StorageGateway {
   create<T = unknown>(entity: StorageEntity | string, value: Record<string, unknown>): Promise<T>;
   update<T = unknown>(entity: StorageEntity | string, id: string, patch: Record<string, unknown>): Promise<T>;
   delete(entity: StorageEntity | string, id: string): Promise<{ deleted: boolean }>;
+  request<T = unknown>(method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE", operation: string, payload?: unknown): Promise<T>;
   call<T = unknown>(operation: string, payload?: unknown): Promise<T>;
 }

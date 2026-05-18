@@ -6,7 +6,7 @@ import { useActiveLorebookEntries } from "../../lorebooks/hooks/use-lorebooks";
 import { useUIStore } from "../../../shared/stores/ui.store";
 
 const WorldInfoPanel = lazy(async () => {
-  const module = await import("./ChatRoleplayPanels");
+  const module = await import("./WorldInfoPanel");
   return { default: module.WorldInfoPanel };
 });
 

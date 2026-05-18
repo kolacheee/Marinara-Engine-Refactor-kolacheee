@@ -8,8 +8,9 @@ import { useConnections } from "../../connections/hooks/use-connections";
 import { useCreatePersona } from "../../characters/hooks/use-characters";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { Sparkles, Loader2, Wand2, CheckCircle, AlertCircle, ChevronDown, User, Save } from "lucide-react";
-import { api } from "../../../shared/lib/api-client";
 import { ProfessorMariWorkingWindow } from "../../../shared/components/ui/ProfessorMariWorkingWindow";
+import { generatePersonaMaker } from "../../../engine/generation";
+import { llmApi } from "../../../shared/api/llm-api";
 
 interface Props {
   open: boolean;
@@ -61,29 +62,34 @@ export function PersonaMakerModal({ open, onClose }: Props) {
     setGenerated(null);
     setError(null);
 
+    const abort = new AbortController();
+    abortRef.current = abort;
+
     try {
       let fullText = "";
-      for await (const chunk of api.stream("/persona-maker/generate", {
-        prompt,
-        connectionId,
-        streaming: enableStreaming,
-      })) {
-        fullText += chunk;
-        setStreamText(fullText);
+      let parsed: GeneratedData | null = null;
+      for await (const event of generatePersonaMaker(
+        { llm: llmApi },
+        { prompt, connectionId, streaming: enableStreaming },
+        abort.signal,
+      )) {
+        if (event.type === "token") {
+          fullText += event.data;
+          setStreamText(fullText);
+        } else if (event.type === "done") {
+          parsed = JSON.parse(event.data) as GeneratedData;
+        }
       }
 
-      try {
-        const jsonMatch = fullText.match(/```(?:json)?\s*([\s\S]*?)```/) ?? [null, fullText];
-        const jsonStr = (jsonMatch[1] ?? fullText).trim();
-        const parsed = JSON.parse(jsonStr) as GeneratedData;
-        setGenerated(parsed);
-      } catch {
-        setError("Generated text wasn't valid JSON. You can try again.");
-      }
+      if (parsed) setGenerated(parsed);
+      else setError("Generated text wasn't valid JSON. You can try again.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation failed");
+      if ((err as Error).name !== "AbortError") {
+        setError(err instanceof Error ? err.message : "Generation failed");
+      }
     } finally {
       setStreaming(false);
+      abortRef.current = null;
     }
   }, [prompt, connectionId, enableStreaming]);
 
