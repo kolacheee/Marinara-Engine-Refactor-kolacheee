@@ -6,8 +6,8 @@
 //
 // Two toggles live on this row:
 //  • Collapse — a UI-only chevron that hides/shows the folder body. Persisted
-//    in localStorage by the parent editor; never sent to the server.
-//  • Enable  — a server-persisted folder.enabled flag. When OFF, every entry
+//    in localStorage by the parent editor; never sent to native storage.
+//  • Enable  — a native folder.enabled flag. When OFF, every entry
 //    inside the folder is gated out at activation time regardless of the
 //    entry's own enabled flag. Entries' own flags are preserved untouched.
 // ──────────────────────────────────────────────
@@ -83,8 +83,8 @@ export function LorebookFolderRow({
       const previous = localEnabled;
       const next = !previous;
       // Optimistic flip — but if the PATCH fails, restore the previous value
-      // so the row doesn't lie about the server state. This matters most for
-      // `enabled`: the activation gate runs server-side, so a failed flip
+      // so the row doesn't lie about persisted state. This matters most for
+      // `enabled`: the activation gate runs through native storage, so a failed flip
       // would mean the row says "off" while entries still activate (or vice
       // versa).
       setLocalEnabled(next);
@@ -112,9 +112,9 @@ export function LorebookFolderRow({
         { lorebookId, folderId: folder.id, name: trimmed },
         {
           onError: () => {
-            // Roll the displayed name back to whatever the server still has
+            // Roll the displayed name back to whatever native storage still has
             // so the row doesn't continue showing a renamed folder that the
-            // server never accepted.
+            // save never accepted.
             setLocalName(previous);
           },
         },

@@ -51,7 +51,7 @@ export interface PresentCharacter {
   appearance: string | null;
   /** Current clothing / outfit description */
   outfit: string | null;
-  /** Avatar image path (e.g., /api/avatars/file/<filename>) */
+  /** Avatar image path or data URL. */
   avatarPath?: string | null;
   /** Featured tracker portrait focus, 0 = left, 100 = right. */
   portraitFocusX?: number;

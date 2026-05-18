@@ -10,29 +10,14 @@ import {
   userBackgroundUrl,
 } from "../api/local-file-api";
 
-const LEGACY_USER_BACKGROUND_URL_PREFIX = "/api/backgrounds/file/";
-const LEGACY_GAME_ASSET_BACKGROUND_URL_PREFIX = "/api/game-assets/file/";
 const GAME_ASSET_BACKGROUND_META_PREFIX = "gameAsset:";
-
-function safeDecode(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
 
 export function chatBackgroundMetadataToUrl(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const background = value.trim();
   if (!background) return null;
 
-  if (
-    background.startsWith(USER_BACKGROUND_URL_PREFIX) ||
-    background.startsWith(GAME_ASSET_URL_PREFIX) ||
-    background.startsWith(LEGACY_USER_BACKGROUND_URL_PREFIX) ||
-    background.startsWith(LEGACY_GAME_ASSET_BACKGROUND_URL_PREFIX)
-  ) {
+  if (background.startsWith(USER_BACKGROUND_URL_PREFIX) || background.startsWith(GAME_ASSET_URL_PREFIX)) {
     return background;
   }
   if (/^(https?:|data:|blob:)/i.test(background) || background.startsWith("/")) {
@@ -59,24 +44,9 @@ export function chatBackgroundUrlToMetadata(url: string | null): string | null {
     return assetPath ? `${GAME_ASSET_BACKGROUND_META_PREFIX}${assetPath}` : null;
   }
 
-  if (url.startsWith(LEGACY_USER_BACKGROUND_URL_PREFIX)) {
-    return safeDecode(url.slice(LEGACY_USER_BACKGROUND_URL_PREFIX.length));
-  }
-
-  if (url.startsWith(LEGACY_GAME_ASSET_BACKGROUND_URL_PREFIX)) {
-    const assetPath = safeDecode(url.slice(LEGACY_GAME_ASSET_BACKGROUND_URL_PREFIX.length)).replace(/^\/+/, "");
-    return assetPath ? `${GAME_ASSET_BACKGROUND_META_PREFIX}${assetPath}` : null;
-  }
-
   return url;
 }
 
 export function isManagedChatBackgroundUrl(url: string | null): boolean {
-  return (
-    !!url &&
-    (url.startsWith(USER_BACKGROUND_URL_PREFIX) ||
-      url.startsWith(GAME_ASSET_URL_PREFIX) ||
-      url.startsWith(LEGACY_USER_BACKGROUND_URL_PREFIX) ||
-      url.startsWith(LEGACY_GAME_ASSET_BACKGROUND_URL_PREFIX))
-  );
+  return !!url && (url.startsWith(USER_BACKGROUND_URL_PREFIX) || url.startsWith(GAME_ASSET_URL_PREFIX));
 }

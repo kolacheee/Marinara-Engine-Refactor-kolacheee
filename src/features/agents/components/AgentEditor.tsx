@@ -90,7 +90,7 @@ function isDeferredLocalModelConnectionId(value: string | null | undefined): boo
   return value === "__local_sidecar__" || value === "sidecar:local" || value?.startsWith("sidecar:") === true;
 }
 
-// Mirrors the server's buildSpotifyRedirectUri rule: Spotify only accepts
+// Mirrors the native Spotify redirect rule: Spotify only accepts
 // https:// or http://127.0.0.1, so fall back to loopback whenever the page
 // is served over plain HTTP from a non-loopback host.
 function getDisplayedSpotifyRedirectUri(): string {
@@ -448,7 +448,7 @@ export function AgentEditor() {
     const isEditingCustomAgent = isCustomAgent || isNewCustomAgent;
     const savedPhase = isEditingCustomAgent && localResultType === "text_rewrite" ? "post_processing" : localPhase;
 
-    // Preserve OAuth fields the form doesn't expose. The server replaces
+    // Preserve OAuth fields the form doesn't expose. The native update replaces
     // `settings` wholesale, so anything we omit here would be wiped — and the
     // Spotify tokens live in settings rather than their own column.
     const currentSettings: Record<string, unknown> = dbConfig?.settings
@@ -466,7 +466,7 @@ export function AgentEditor() {
       description: localDescription,
       phase: savedPhase,
       enabled: true,
-      connectionId: localConnectionId || null,
+      connectionId: isDeferredLocalModelConnectionId(localConnectionId) ? null : localConnectionId || null,
       promptTemplate: localPrompt,
       settings: {
         ...preservedSpotifyFields,
@@ -1400,7 +1400,7 @@ export function AgentEditor() {
                             // keep polling
                           }
                         }, 2000);
-                        // Stop polling after the server-side pendingAuth TTL
+                        // Stop polling after the native pending-auth TTL.
                         spotifyTimeoutRef.current = setTimeout(() => {
                           if (spotifyPollRef.current) {
                             clearInterval(spotifyPollRef.current);

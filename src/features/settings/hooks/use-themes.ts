@@ -86,7 +86,7 @@ export function useLegacyThemeMigration() {
     void (async () => {
       try {
         const latestThemes = await api.get<Theme[]>("/themes");
-        const serverAlreadyHasActiveTheme = latestThemes.some((theme) => theme.isActive);
+        const storedAlreadyHasActiveTheme = latestThemes.some((theme) => theme.isActive);
         let workingThemes = [...latestThemes];
         let migratedActiveThemeId: string | null = null;
 
@@ -101,7 +101,7 @@ export function useLegacyThemeMigration() {
             workingThemes = [storedTheme, ...workingThemes];
           }
 
-          if (!serverAlreadyHasActiveTheme && legacyActiveCustomTheme === legacyTheme.id) {
+          if (!storedAlreadyHasActiveTheme && legacyActiveCustomTheme === legacyTheme.id) {
             migratedActiveThemeId = storedTheme.id;
           }
         }

@@ -3,11 +3,12 @@ use marinara_security::validate_collection_name;
 use serde_json::{json, Map, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
+#[derive(Clone)]
 pub struct FileStorage {
     root: PathBuf,
-    lock: Mutex<()>,
+    lock: Arc<Mutex<()>>,
 }
 
 impl FileStorage {
@@ -16,7 +17,7 @@ impl FileStorage {
         fs::create_dir_all(root.join("collections"))?;
         Ok(Self {
             root,
-            lock: Mutex::new(()),
+            lock: Arc::new(Mutex::new(())),
         })
     }
 

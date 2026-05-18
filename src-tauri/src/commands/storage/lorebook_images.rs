@@ -1,8 +1,9 @@
+use super::images::percent_encode_component;
 use super::media_uploads::{persist_image_upload, safe_filename};
 use super::shared::decode_path;
 use super::*;
 
-const LOREBOOK_IMAGE_PREFIX: &str = "/api/lorebooks/images/file/";
+const LOREBOOK_IMAGE_PREFIX: &str = "marinara-lorebook-image:";
 
 pub(crate) fn update_lorebook_image(state: &AppState, lorebook_id: &str, body: Value) -> AppResult<Value> {
     get_required_lorebook(state, lorebook_id)?;
@@ -11,7 +12,7 @@ pub(crate) fn update_lorebook_image(state: &AppState, lorebook_id: &str, body: V
         "lorebooks",
         lorebook_id,
         json!({
-            "imagePath": format!("{LOREBOOK_IMAGE_PREFIX}{}", stored.filename),
+            "imagePath": format!("{LOREBOOK_IMAGE_PREFIX}{}", percent_encode_component(&stored.filename)),
             "imageFilePath": stored.absolute_path,
             "imageFilename": stored.filename,
             "imageUpdatedAt": now_iso()

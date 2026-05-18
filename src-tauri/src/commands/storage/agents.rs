@@ -218,6 +218,60 @@ pub(crate) fn agent_memory(
     }
 }
 
+pub(crate) fn clear_agent_runs_and_memory_for_chat(
+    state: &AppState,
+    chat_id: &str,
+) -> AppResult<Value> {
+    let mut preserved_arc: Option<Value> = None;
+    let mut secret_plot_config_id: Option<String> = None;
+
+    if let Some(secret_plot_config) = find_agent_config(state, "secret-plot-driver")? {
+        if let Some(config_id) = secret_plot_config
+            .get("id")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        {
+            let memory = read_agent_memory(state, &config_id, chat_id).unwrap_or_default();
+            if let Some(arc) = memory.get("overarchingArc") {
+                preserved_arc = Some(arc.clone());
+                secret_plot_config_id = Some(config_id);
+            }
+        }
+    }
+
+    let mut filters = Map::new();
+    filters.insert("chatId".to_string(), Value::String(chat_id.to_string()));
+
+    let mut deleted_runs = 0;
+    for row in state.storage.list_where("agent-runs", &filters)? {
+        if let Some(id) = row.get("id").and_then(Value::as_str) {
+            if state.storage.delete("agent-runs", id)? {
+                deleted_runs += 1;
+            }
+        }
+    }
+
+    let mut deleted_memory = 0;
+    for row in state.storage.list_where("agent-memory", &filters)? {
+        if let Some(id) = row.get("id").and_then(Value::as_str) {
+            if state.storage.delete("agent-memory", id)? {
+                deleted_memory += 1;
+            }
+        }
+    }
+
+    let preserved_secret_plot_arc = secret_plot_config_id.is_some() && preserved_arc.is_some();
+    if let (Some(config_id), Some(arc)) = (secret_plot_config_id, preserved_arc) {
+        set_agent_memory_value(state, &config_id, chat_id, "overarchingArc", arc)?;
+    }
+
+    Ok(json!({
+        "deletedRuns": deleted_runs,
+        "deletedMemory": deleted_memory,
+        "preservedSecretPlotArc": preserved_secret_plot_arc
+    }))
+}
+
 fn read_agent_memory(
     state: &AppState,
     agent_config_id: &str,

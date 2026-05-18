@@ -81,7 +81,7 @@ import { ExportFormatDialog, type ExportFormatChoice } from "../../../shared/com
 
 // ──────────────────────────────────────────────
 // Folder collapse state lives in localStorage — purely a UI preference, not
-// worth a server round-trip on every toggle. Keyed per-lorebook so collapse
+// worth a native storage write on every toggle. Keyed per-lorebook so collapse
 // state is independent across books.
 // ──────────────────────────────────────────────
 const FOLDER_COLLAPSE_KEY_PREFIX = "lorebook-folder-collapsed:";
@@ -591,7 +591,7 @@ export function LorebookEditor() {
   // + secondaryKeys + selectiveLogic / enabled / constant. Skips runtime gates
   // that have no meaning outside a live chat (timing, probability, character
   // filters, semantic embeddings, recursive scan, group selection).
-  // Logic mirrors packages/server/src/services/lorebook/keyword-scanner.ts —
+  // Logic mirrors the original lorebook keyword scanner —
   // both sides import the same shared helpers so the preview cannot drift.
   const previewMatches = useMemo(() => {
     const result = new Map<string, "matched" | "constant">();
@@ -968,7 +968,7 @@ export function LorebookEditor() {
   }, [lorebookDirty, closeDetail]);
 
   // If the editor is opened with a `lorebookId` that no longer resolves on
-  // the server (a stale pointer carried over from another Marinara
+  // native storage (a stale pointer carried over from another Marinara
   // instance's character export, or one that survived an auto-import that
   // errored), the loading branch — `isLoading || !lorebook` — would render
   // a shimmer forever. Detect the 404 explicitly and bail back to the

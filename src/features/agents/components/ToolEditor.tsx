@@ -33,7 +33,7 @@ import { HelpTooltip } from "../../../shared/components/ui/HelpTooltip";
 const EXEC_TYPES = [
   { value: "static", label: "Static Result", icon: FileText, description: "Returns a fixed string when called." },
   { value: "webhook", label: "Webhook", icon: Globe, description: "Sends a POST request to an external URL." },
-  { value: "script", label: "Script", icon: Code2, description: "Runs a JavaScript expression server-side." },
+  { value: "script", label: "Script", icon: Code2, description: "Runs a JavaScript expression in the native tool runtime." },
 ] as const;
 
 const SCRIPT_TOOLS_DISABLED_MESSAGE =

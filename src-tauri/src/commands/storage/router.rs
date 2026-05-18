@@ -554,9 +554,8 @@ pub(crate) async fn route_request(
             list_collection(state, "agent-runs", Some(("chatId", *chat_id)))
         }
         ["agents", "runs", id] if method == "PATCH" => state.storage.patch("agent-runs", id, body),
-        ["agents", "runs", id] if method == "DELETE" => {
-            let deleted = state.storage.delete("agent-runs", id)?;
-            Ok(json!({ "deleted": deleted }))
+        ["agents", "runs", chat_id] if method == "DELETE" => {
+            clear_agent_runs_and_memory_for_chat(state, chat_id)
         }
         ["agents", "memory", agent_type, chat_id] => {
             agent_memory(state, method, agent_type, chat_id, body)

@@ -158,12 +158,10 @@ export interface CustomTheme {
 }
 
 /**
- * Pre-migration shape of a browser-local extension. Only used to read
- * existing localStorage state and replay it against the server
- * (`/api/extensions`) on first load — see `useLegacyExtensionMigration`.
- * New extensions go directly through the server-synced hooks in
- * `use-extensions.ts` and use the canonical `InstalledExtension` type
- * exported from `@marinara-engine/shared`.
+ * Pre-Tauri-storage shape of a browser-local extension. Only used to read
+ * existing localStorage state and replay it into native storage on first load.
+ * New extensions go through `use-extensions.ts` and use the canonical
+ * `InstalledExtension` type exported from `@marinara-engine/shared`.
  */
 export interface LegacyInstalledExtension {
   id: string;
@@ -392,11 +390,11 @@ interface UIState {
   activeCustomTheme: string | null;
   /** Legacy browser-local custom themes. Migration only. */
   customThemes: CustomTheme[];
-  /** True once legacy browser-local themes have been migrated to the server. */
+  /** True once legacy browser-local themes have been migrated to native storage. */
   hasMigratedCustomThemesToServer: boolean;
   /** Legacy browser-local extensions. Migration only — see useLegacyExtensionMigration. */
   installedExtensions: LegacyInstalledExtension[];
-  /** True once legacy browser-local extensions have been migrated to the server. */
+  /** True once legacy browser-local extensions have been migrated to native storage. */
   hasMigratedExtensionsToServer: boolean;
 
   // ── Onboarding ──
@@ -420,7 +418,7 @@ interface UIState {
   userActivity: string;
 
   // ── Impersonate Settings ──
-  /** Custom prompt template for /impersonate (empty = use server default). Persisted. */
+  /** Custom prompt template for /impersonate (empty = use the built-in default). Persisted. */
   impersonatePromptTemplate: string;
   /** Show a quick /impersonate button in the chat input toolbar. Persisted. */
   impersonateShowQuickButton: boolean;
@@ -586,10 +584,10 @@ interface UIState {
 }
 
 /**
- * Returns the subset of UI state that is synced to the server so it persists
- * across devices and browsers. Excludes legacy migration flags, auto-computed
- * fields (userStatus), and items tracked via their own server resources
- * (custom themes, extensions).
+ * Returns the subset of UI state persisted through the local settings record.
+ * Excludes legacy migration flags, auto-computed fields (userStatus), and
+ * items tracked through their own native storage collections (custom themes,
+ * extensions).
  */
 export function pickSyncedSettings(state: UIState) {
   return {

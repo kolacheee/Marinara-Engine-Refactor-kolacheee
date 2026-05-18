@@ -881,8 +881,8 @@ function GeneralSettings() {
         </div>
 
         <p className="mt-2.5 text-[0.625rem] leading-relaxed text-[var(--muted-foreground)]">
-          On desktop, folder buttons open the server's asset folders. On mobile or a dedicated server, use upload here
-          so files from your phone are copied onto the server. Audio supports MP3, OGG, WAV, FLAC, M4A, AAC, and WebM;
+          On desktop, folder buttons open the local app asset folders. Use upload to copy files into Marinara's
+          managed data directory. Audio supports MP3, OGG, WAV, FLAC, M4A, AAC, and WebM;
           images support PNG, JPG, GIF, WebP, AVIF, and SVG for sprites. Music folders use state/genre/intensity, such
           as exploration/fantasy/calm.
         </p>
@@ -2703,7 +2703,7 @@ function ImportSettings() {
       if (err instanceof Error && err.message === "parse") {
         toast.error("Import failed. Make sure this is a valid .marinara or .json file.");
       } else {
-        toast.error(`Import failed: ${err instanceof Error ? err.message : "network/server error"}`);
+        toast.error(`Import failed: ${err instanceof Error ? err.message : "local import error"}`);
       }
     }
     e.target.value = "";
@@ -2785,7 +2785,7 @@ function ImportSettings() {
       const message =
         err instanceof SyntaxError
           ? "Import failed. Make sure this is a valid profile JSON file."
-          : `Import failed: ${err instanceof Error ? err.message : "network/server error"}`;
+          : `Import failed: ${err instanceof Error ? err.message : "local import error"}`;
       setProfileImportProgress({
         status: "error",
         label: "Profile import failed",
@@ -3113,7 +3113,7 @@ function AdvancedSettings() {
    *
    * Uses the File System Access API (`showSaveFilePicker`) when available so
    * the browser opens a native "Save As" dialog — this is important on Android
-   * and iOS, where the server-side `data/backups/` folder isn't reachable
+   * and iOS, where the local `data/backups/` folder isn't reachable
    * without root. Falls back to an anchor-triggered download (which routes
    * through the browser's default Downloads handling).
    */
@@ -3274,7 +3274,7 @@ function AdvancedSettings() {
   const manualUpdateCommand = updateCheck.data?.manualUpdateCommand ?? null;
   const applyUnavailableCopy =
     applyUnavailableReason === "disabled"
-      ? "This install can check for updates, but applying them from the browser is disabled. Update manually with the command below. Advanced git installs can enable server-side apply with UPDATES_APPLY_ENABLED=true."
+      ? "This install can check for updates, but applying them from this UI is disabled. Update manually with the command below. Advanced git installs can enable desktop apply with UPDATES_APPLY_ENABLED=true."
       : "This install can check for updates, but it cannot apply them from the browser. Relaunch the app if you use the launcher, or update manually for your install type.";
   const isClearing = clearAllData.isPending || expungeData.isPending;
   const isAllScopesSelected = selectedScopes.length === EXPUNGE_SCOPE_OPTIONS.length;
@@ -3679,7 +3679,7 @@ function AdvancedSettings() {
         label="Debug mode"
         checked={debugMode}
         onChange={setDebugMode}
-        help="Logs the prompt and response payloads sent to the model in the server console for debugging."
+        help="Logs the prompt and response payloads sent to the local Tauri console for debugging."
       />
 
       {/* ── Backup ── */}

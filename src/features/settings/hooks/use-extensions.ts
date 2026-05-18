@@ -86,10 +86,10 @@ export function useDeleteExtension() {
 }
 
 /**
- * One-shot migration of pre-server-storage extensions out of localStorage.
+ * One-shot migration of pre-Tauri-storage extensions out of localStorage.
  *
- * Mirrors `useLegacyThemeMigration`: on first successful list fetch we POST
- * any local-only extensions that don't already exist on the server, then
+ * Mirrors `useLegacyThemeMigration`: on first successful list fetch we store
+ * any local-only extensions that don't already exist in native storage, then
  * clear the legacy array and flip the migration flag so we don't run again.
  */
 export function useLegacyExtensionMigration() {
@@ -99,7 +99,7 @@ export function useLegacyExtensionMigration() {
   const setMigrated = useUIStore((s) => s.setHasMigratedExtensionsToServer);
   const qc = useQueryClient();
   const inFlightRef = useRef(false);
-  const { data: serverExtensions, isSuccess } = useExtensions();
+  const { data: storedExtensions, isSuccess } = useExtensions();
 
   useEffect(() => {
     if (hasMigrated || !isSuccess || inFlightRef.current) {
@@ -115,7 +115,7 @@ export function useLegacyExtensionMigration() {
       try {
         // Reuse the list React Query already fetched instead of issuing a
         // duplicate GET that would eat into the rate-limit budget.
-        let working = [...(serverExtensions ?? [])];
+        let working = [...(storedExtensions ?? [])];
 
         for (const legacy of legacyExtensions) {
           const css = legacy.css ?? null;
@@ -144,5 +144,5 @@ export function useLegacyExtensionMigration() {
         inFlightRef.current = false;
       }
     })();
-  }, [clearLegacy, hasMigrated, isSuccess, legacyExtensions, qc, serverExtensions, setMigrated]);
+  }, [clearLegacy, hasMigrated, isSuccess, legacyExtensions, qc, storedExtensions, setMigrated]);
 }

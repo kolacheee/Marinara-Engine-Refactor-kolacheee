@@ -229,7 +229,7 @@ export function ConnectionEditor() {
   const [remoteModels, setRemoteModels] = useState<Array<{ id: string; name: string }>>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Populate from server
+  // Populate from the stored connection record.
   useEffect(() => {
     if (!conn) return;
     const c = conn as Record<string, unknown>;
@@ -592,7 +592,7 @@ export function ConnectionEditor() {
   const handleFetchModels = useCallback(async () => {
     if (!connectionDetailId) return;
     setFetchError(null);
-    // Save first if dirty so the server has the right baseUrl/apiKey/provider
+    // Save first if dirty so native provider calls use the latest baseUrl/apiKey/provider.
     if (dirty) {
       try {
         await handleSave();

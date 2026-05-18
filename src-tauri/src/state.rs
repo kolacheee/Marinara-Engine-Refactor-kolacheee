@@ -4,6 +4,7 @@ use marinara_storage::FileStorage;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
+#[derive(Clone)]
 pub struct AppState {
     pub storage: FileStorage,
     pub game_assets: AssetService,

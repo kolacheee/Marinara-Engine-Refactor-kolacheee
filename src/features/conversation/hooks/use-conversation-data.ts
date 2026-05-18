@@ -422,7 +422,7 @@ export function useUpdateChatMetadata() {
     mutationFn: ({ id, ...metadata }: { id: string; [key: string]: unknown }) =>
       api.patch<Chat>(`/chats/${id}/metadata`, metadata),
     onSuccess: (data, vars) => {
-      // Write the server response straight into the detail cache. Plain
+      // Write the saved response straight into the detail cache. Plain
       // invalidation alone leaves stale data in place when no observer is
       // mounted to trigger a refetch (e.g. user navigated away after firing
       // the mutation), causing later renders to re-read the pre-mutation
@@ -549,7 +549,7 @@ export function useUpdateMessage(chatId: string | null) {
     onMutate: async ({ messageId, content }) => {
       if (!chatId) return;
       // Cancel in-flight refetches (e.g. from generation events) so they
-      // don't overwrite the optimistic value with stale server data.
+      // don't overwrite the optimistic value with stale stored data.
       await qc.cancelQueries({ queryKey: chatKeys.messages(chatId) });
       const previous = qc.getQueryData<InfiniteData<Message[]>>(chatKeys.messages(chatId));
       const previousMessage = findCachedMessage(previous, messageId);

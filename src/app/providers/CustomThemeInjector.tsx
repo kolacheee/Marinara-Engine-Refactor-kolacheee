@@ -43,18 +43,18 @@ function buildExtensionModuleSource(apiKey: string, extensionName: string, js: s
 }
 
 export function CustomThemeInjector() {
-  const { data: serverExtensions = [] } = useExtensions();
+  const { data: storedExtensions = [] } = useExtensions();
   const legacyExtensions = useUIStore((s) => s.installedExtensions);
   const hasMigrated = useUIStore((s) => s.hasMigratedExtensionsToServer);
   // Until the legacy localStorage list has been migrated, fall back to it so
   // users with pre-PR extensions don't see them vanish during the brief window
   // between app boot and `useLegacyExtensionMigration` finishing.
   const installedExtensions = useMemo(
-    () => (hasMigrated ? serverExtensions : legacyExtensions),
-    [hasMigrated, serverExtensions, legacyExtensions],
+    () => (hasMigrated ? storedExtensions : legacyExtensions),
+    [hasMigrated, storedExtensions, legacyExtensions],
   );
-  const { data: syncedThemes = [] } = useThemes();
-  const activeTheme = syncedThemes.find((theme) => theme.isActive) ?? null;
+  const { data: customThemes = [] } = useThemes();
+  const activeTheme = customThemes.find((theme) => theme.isActive) ?? null;
 
   // Inject active custom theme CSS
   useEffect(() => {

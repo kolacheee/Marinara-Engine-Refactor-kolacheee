@@ -4,7 +4,6 @@ import { api } from "./api-client";
 export const USER_BACKGROUND_URL_PREFIX = "marinara-background:";
 export const GAME_ASSET_URL_PREFIX = "marinara-game-asset:";
 export const LOREBOOK_IMAGE_URL_PREFIX = "marinara-lorebook-image:";
-const LEGACY_LOREBOOK_IMAGE_URL_PREFIX = "/api/lorebooks/images/file/";
 
 type PathResponse = { path?: string | null };
 
@@ -50,8 +49,7 @@ export function isManagedLocalAssetUrl(url: string | null | undefined): boolean 
     !!url &&
     (url.startsWith(USER_BACKGROUND_URL_PREFIX) ||
       url.startsWith(GAME_ASSET_URL_PREFIX) ||
-      url.startsWith(LOREBOOK_IMAGE_URL_PREFIX) ||
-      url.startsWith(LEGACY_LOREBOOK_IMAGE_URL_PREFIX))
+      url.startsWith(LOREBOOK_IMAGE_URL_PREFIX))
   );
 }
 
@@ -100,9 +98,6 @@ export async function resolveManagedLocalAssetUrl(url: string | null | undefined
   }
   if (url.startsWith(LOREBOOK_IMAGE_URL_PREFIX)) {
     return resolveLorebookImageFileUrl(decodeLocalAssetPath(url.slice(LOREBOOK_IMAGE_URL_PREFIX.length)));
-  }
-  if (url.startsWith(LEGACY_LOREBOOK_IMAGE_URL_PREFIX)) {
-    return resolveLorebookImageFileUrl(decodeLocalAssetPath(url.slice(LEGACY_LOREBOOK_IMAGE_URL_PREFIX.length)));
   }
   return filePathToAssetUrl(url);
 }

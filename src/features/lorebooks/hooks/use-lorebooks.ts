@@ -89,11 +89,11 @@ export function useDeleteLorebook() {
       // after a refetch errors — so without explicit removal the next
       // "Edit Linked Lorebook" click would render a ghost editor with
       // the deleted lorebook's name and metadata while the entries
-      // query reports 0 entries from the server.
+      // query reports 0 entries from native storage.
       qc.removeQueries({ queryKey: lorebookKeys.detail(id) });
       qc.removeQueries({ queryKey: lorebookKeys.entries(id) });
       qc.invalidateQueries({ queryKey: lorebookKeys.all });
-      // The server clears `character_book` and the
+      // Native storage clears `character_book` and the
       // `extensions.importMetadata.embeddedLorebook` pointer for any
       // character this lorebook was linked to. We do not know that
       // characterId client-side (the detail cache may already be gone

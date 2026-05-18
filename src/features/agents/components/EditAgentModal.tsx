@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../shared/lib/api-client";
 import { useConnections } from "../../connections/hooks/use-connections";
 import { Loader2, Sparkles, Save } from "lucide-react";
-import { LOCAL_SIDECAR_CONNECTION_ID, type AgentPhase } from "@marinara-engine/shared";
+import { type AgentPhase } from "@marinara-engine/shared";
 
 export interface AgentData {
   id?: string;
@@ -32,6 +32,10 @@ const PHASE_OPTIONS: { value: AgentPhase; label: string }[] = [
   { value: "parallel", label: "Parallel" },
   { value: "post_processing", label: "Post-Processing" },
 ];
+
+function isDeferredLocalModelConnectionId(value: string | null | undefined): boolean {
+  return value === "__local_sidecar__" || value === "sidecar:local" || value?.startsWith("sidecar:") === true;
+}
 
 export function EditAgentModal({ open, onClose, agent }: Props) {
   const qc = useQueryClient();
@@ -88,7 +92,7 @@ export function EditAgentModal({ open, onClose, agent }: Props) {
       name: form.name,
       description: form.description,
       phase: form.phase,
-      connectionId: form.connectionId || null,
+      connectionId: isDeferredLocalModelConnectionId(form.connectionId) ? null : form.connectionId || null,
       promptTemplate: form.promptTemplate,
     };
 
@@ -169,7 +173,6 @@ export function EditAgentModal({ open, onClose, agent }: Props) {
             className="w-full rounded-lg bg-[var(--secondary)] px-3 py-2 text-sm outline-none ring-1 ring-transparent transition-shadow focus:ring-[var(--primary)]"
           >
             <option value="">Use default connection</option>
-            {false && <option value={LOCAL_SIDECAR_CONNECTION_ID}>Local Model (sidecar)</option>}
             {(connections as Array<{ id: string; name: string; provider: string }> | undefined)?.map((conn) => (
               <option key={conn.id} value={conn.id}>
                 {conn.name} ({conn.provider})
@@ -177,8 +180,8 @@ export function EditAgentModal({ open, onClose, agent }: Props) {
             ))}
           </select>
           <span className="text-[0.625rem] text-[var(--muted-foreground)]">
-            {form.connectionId === LOCAL_SIDECAR_CONNECTION_ID
-              ? "This agent was using the deferred local sidecar option. Pick a normal connection before saving."
+            {isDeferredLocalModelConnectionId(form.connectionId)
+              ? "This agent was using a deferred local model option. Pick a configured connection before saving."
               : "Leave empty to use the default agent connection or the chat connection."}
           </span>
         </label>
