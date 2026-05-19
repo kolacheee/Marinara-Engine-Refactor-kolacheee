@@ -56,15 +56,23 @@ pub(crate) fn remove_managed_record_file(
     record: &Value,
     path_key: &str,
     filename_key: &str,
-) -> AppResult<()> {
-    let Some(path) = managed_record_file_path(state, folder, record, path_key, filename_key)?
+) {
+    let Ok(Some(path)) = managed_record_file_path(state, folder, record, path_key, filename_key)
     else {
-        return Ok(());
+        return;
     };
     if path.exists() && path.is_file() {
-        fs::remove_file(path)?;
+        if let Err(error) = fs::remove_file(&path) {
+            let record_id = record
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("<unknown>");
+            eprintln!(
+                "warn: failed to remove managed file for {folder}/{record_id} at {}: {error}",
+                path.display()
+            );
+        }
     }
-    Ok(())
 }
 
 fn managed_record_file_path(

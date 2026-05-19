@@ -119,7 +119,7 @@ pub fn storage_delete(
     let deleted = state.storage.delete(&entity, &id)?;
     if deleted {
         if let Some(record) = existing.as_ref() {
-            remove_owned_media(&state, &entity, record)?;
+            remove_owned_media(&state, &entity, record);
         }
     }
     Ok(json!({ "deleted": deleted }))
@@ -132,11 +132,11 @@ fn media_owned_record(state: &AppState, entity: &str, id: &str) -> Result<Option
     }
 }
 
-fn remove_owned_media(state: &AppState, entity: &str, record: &Value) -> Result<(), AppError> {
+fn remove_owned_media(state: &AppState, entity: &str, record: &Value) {
     match entity {
         "characters" | "personas" => avatars::remove_avatar_file(state, entity, record),
         "lorebooks" => lorebook_images::remove_lorebook_image_file(state, record),
-        _ => Ok(()),
+        _ => {}
     }
 }
 

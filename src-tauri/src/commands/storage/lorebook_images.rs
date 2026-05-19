@@ -22,11 +22,11 @@ pub(crate) fn update_lorebook_image(
             "imageUpdatedAt": now_iso()
         }),
     )?;
-    remove_lorebook_image_file(state, &previous)?;
+    remove_lorebook_image_file(state, &previous);
     Ok(updated)
 }
 
-pub(crate) fn remove_lorebook_image_file(state: &AppState, record: &Value) -> AppResult<()> {
+pub(crate) fn remove_lorebook_image_file(state: &AppState, record: &Value) {
     remove_managed_record_file(
         state,
         "lorebooks/images",
