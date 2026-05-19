@@ -50,6 +50,11 @@ pub fn storage_list(
         }
     });
 
+    if entity == "messages" {
+        apply_message_pagination(&mut rows, options.as_ref());
+        return Ok(Value::Array(rows));
+    }
+
     if let Some(limit) = options
         .as_ref()
         .and_then(|value| value.get("limit"))
@@ -128,4 +133,58 @@ fn compare_json_values(left: Option<&Value>, right: Option<&Value>) -> std::cmp:
         (None, Some(_)) => std::cmp::Ordering::Greater,
         _ => std::cmp::Ordering::Equal,
     }
+}
+
+fn apply_message_pagination(rows: &mut Vec<Value>, options: Option<&Value>) {
+    rows.sort_by(|a, b| {
+        let (a_created_at, a_id) = message_cursor(a);
+        let (b_created_at, b_id) = message_cursor(b);
+        a_created_at.cmp(b_created_at).then_with(|| a_id.cmp(b_id))
+    });
+
+    let before = options
+        .and_then(|value| value.get("before"))
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(parse_message_cursor);
+
+    if let Some((before_created_at, before_id)) = before {
+        rows.retain(|row| {
+            let (created_at, id) = message_cursor(row);
+            created_at < before_created_at.as_str()
+                || (created_at == before_created_at.as_str()
+                    && before_id.as_deref().is_some_and(|cursor_id| id < cursor_id))
+        });
+    }
+
+    let Some(limit) = options
+        .and_then(|value| value.get("limit"))
+        .and_then(Value::as_u64)
+        .map(|value| value as usize)
+    else {
+        return;
+    };
+
+    if rows.len() > limit {
+        let keep_from = rows.len() - limit;
+        rows.drain(0..keep_from);
+    }
+}
+
+fn parse_message_cursor(cursor: &str) -> (String, Option<String>) {
+    let mut parts = cursor.splitn(2, '|');
+    let created_at = parts.next().unwrap_or_default().to_string();
+    let id = parts
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+    (created_at, id)
+}
+
+fn message_cursor(row: &Value) -> (&str, &str) {
+    (
+        row.get("createdAt").and_then(Value::as_str).unwrap_or(""),
+        row.get("id").and_then(Value::as_str).unwrap_or(""),
+    )
 }

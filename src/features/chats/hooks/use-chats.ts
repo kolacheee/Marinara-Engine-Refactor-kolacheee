@@ -184,9 +184,9 @@ export function useChatMessages(chatId: string | null, pageSize: number = 0, ena
       if (pageSize <= 0 || lastPage.length < pageSize) return undefined;
       const oldestLoaded = lastPage[0];
       if (!oldestLoaded) return undefined;
-      return typeof oldestLoaded.rowid === "number"
-        ? `${oldestLoaded.createdAt}|${oldestLoaded.rowid}`
-        : oldestLoaded.createdAt;
+      const createdAt = String(oldestLoaded.createdAt ?? "");
+      const id = String(oldestLoaded.id ?? "");
+      return id ? `${createdAt}|${id}` : createdAt;
     },
     enabled: !!chatId && enabled,
   });
