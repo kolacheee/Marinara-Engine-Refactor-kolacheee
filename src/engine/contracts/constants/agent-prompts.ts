@@ -605,7 +605,6 @@ Available actions (only use if the device lists the capability):
 - "oscillate": Wave / pulsing patterns — rhythmic, oscillating output.
 - "rotate": Rotation — for devices with rotating heads or beads.
 - "constrict": Constriction / squeeze — for pump-based or pressure toys.
-- "inflate": Inflation / expansion — for inflatable devices.
 - "position": Linear stroke — for stroker / thrusting devices. Intensity = target position (0.0–1.0), duration = travel time.
 - "stop": Stop all output on the device.
 Respond ONLY with valid JSON:
