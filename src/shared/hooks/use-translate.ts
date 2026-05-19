@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { toast } from "sonner";
 import { invokeTauri } from "../api/tauri-client";
 import { storageApi } from "../api/storage-api";
 import { useTranslationStore } from "../stores/translation.store";
@@ -42,12 +43,12 @@ export function useTranslate() {
       try {
         const result = await invokeTauri<{ translatedText: string }>("translate_text_command", {
           input: {
-          text: content,
-          provider: config.provider,
-          targetLanguage: config.targetLanguage,
-          connectionId: config.connectionId,
-          deeplApiKey: config.deeplApiKey,
-          deeplxUrl: config.deeplxUrl,
+            text: content,
+            provider: config.provider,
+            targetLanguage: config.targetLanguage,
+            connectionId: config.connectionId,
+            deeplApiKey: config.deeplApiKey,
+            deeplxUrl: config.deeplxUrl,
           },
         });
         setTranslation(messageId, result.translatedText);
@@ -55,6 +56,8 @@ export function useTranslate() {
           await patchMessageExtra(messageId, { translation: result.translatedText })
             .catch((error) => console.warn("[translation] Failed to persist translation", error));
         }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to translate message");
       } finally {
         setTranslating(messageId, false);
       }

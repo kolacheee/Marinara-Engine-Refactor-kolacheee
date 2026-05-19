@@ -816,7 +816,7 @@ export const ConversationMessage = memo(function ConversationMessage({
           <MsgAction icon={copied ? "✓" : <Copy size="0.75rem" />} onClick={handleCopy} title="Copy" />
           <MsgAction
             icon={<Languages size="0.75rem" />}
-            onClick={() => translate(message.id, message.content, message.chatId)}
+            onClick={() => void translate(message.id, message.content, message.chatId)}
             title={translatedText ? "Hide translation" : "Translate"}
             className={translatedText ? "text-blue-400" : undefined}
           />
@@ -1121,7 +1121,7 @@ export const ConversationMessage = memo(function ConversationMessage({
           <MsgAction icon={copied ? "✓" : <Copy size="0.75rem" />} onClick={handleCopy} title="Copy" />
           <MsgAction
             icon={<Languages size="0.75rem" />}
-            onClick={() => translate(message.id, renderedContent, message.chatId)}
+            onClick={() => void translate(message.id, renderedContent, message.chatId)}
             title={translatedText ? "Hide translation" : "Translate"}
             className={translatedText ? "text-blue-400" : undefined}
           />

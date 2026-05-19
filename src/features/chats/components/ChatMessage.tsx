@@ -1708,7 +1708,7 @@ export const ChatMessage = memo(function ChatMessage({
               />
               <ActionBtn
                 icon={<Languages size={MESSAGE_ACTION_ICON_SIZE} />}
-                onClick={() => translate(message.id, message.content, message.chatId)}
+                onClick={() => void translate(message.id, message.content, message.chatId)}
                 title={translatedText ? "Hide translation" : "Translate"}
                 className={translatedText ? "text-blue-400/80 hover:text-blue-300" : undefined}
                 dark
@@ -2137,7 +2137,7 @@ export const ChatMessage = memo(function ChatMessage({
             />
             <ActionBtn
               icon={<Languages size={MESSAGE_ACTION_ICON_SIZE} />}
-              onClick={() => translate(message.id, message.content, message.chatId)}
+              onClick={() => void translate(message.id, message.content, message.chatId)}
               title={translatedText ? "Hide translation" : "Translate"}
               className={translatedText ? "text-blue-500" : undefined}
             />
