@@ -101,7 +101,11 @@ pub fn storage_update(
     id: String,
     patch: Value,
 ) -> Result<Value, AppError> {
-    state.storage.patch(&entity, &id, patch)
+    state.storage.patch(
+        &entity,
+        &id,
+        shared::normalize_update_patch(&entity, patch)?,
+    )
 }
 
 #[tauri::command]

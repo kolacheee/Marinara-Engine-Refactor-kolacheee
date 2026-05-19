@@ -109,6 +109,31 @@ pub(crate) fn materialize_message_swipe_fields(message: &mut Value) {
     }
 }
 
+pub(crate) fn normalize_character_data_for_storage(data: &Value) -> AppResult<Value> {
+    match data {
+        Value::String(raw) => Ok(Value::String(raw.clone())),
+        Value::Object(_) => Ok(Value::String(serde_json::to_string(data)?)),
+        _ => Err(AppError::invalid_input(
+            "Character data must be an object or JSON string",
+        )),
+    }
+}
+
+pub(crate) fn normalize_update_patch(collection: &str, patch: Value) -> AppResult<Value> {
+    if collection != "characters" {
+        return Ok(patch);
+    }
+
+    let mut object = ensure_object(patch)?;
+    if let Some(data) = object.get("data") {
+        object.insert(
+            "data".to_string(),
+            normalize_character_data_for_storage(data)?,
+        );
+    }
+    Ok(Value::Object(object))
+}
+
 pub(crate) fn with_entity_defaults(collection: &str, body: Value) -> Value {
     let mut object = ensure_object(body).unwrap_or_default();
     match collection {
@@ -267,6 +292,49 @@ pub(crate) fn with_entity_defaults(collection: &str, body: Value) -> Value {
         _ => {}
     }
     Value::Object(object)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn character_update_patch_serializes_object_data() {
+        let patch = normalize_update_patch(
+            "characters",
+            json!({
+                "data": {
+                    "name": "Professor Mari",
+                    "tags": ["guide"]
+                }
+            }),
+        )
+        .expect("patch should normalize");
+
+        let data = patch
+            .get("data")
+            .and_then(Value::as_str)
+            .expect("character data should be serialized");
+        let parsed: Value =
+            serde_json::from_str(data).expect("serialized data should be valid JSON");
+        assert_eq!(parsed["name"], "Professor Mari");
+        assert_eq!(parsed["tags"], json!(["guide"]));
+    }
+
+    #[test]
+    fn character_update_patch_preserves_string_data() {
+        let raw = r#"{"name":"Professor Mari"}"#;
+        let patch = normalize_update_patch("characters", json!({ "data": raw }))
+            .expect("patch should normalize");
+        assert_eq!(patch["data"], raw);
+    }
+
+    #[test]
+    fn character_update_patch_rejects_invalid_data_shape() {
+        let error = normalize_update_patch("characters", json!({ "data": true }))
+            .expect_err("invalid character data should fail");
+        assert_eq!(error.code, "invalid_input");
+    }
 }
 
 pub(crate) fn duplicate_record(state: &AppState, collection: &str, id: &str) -> AppResult<Value> {
