@@ -577,7 +577,7 @@ function MariContextMenu({
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-xs font-semibold">{persona.name || persona.id}</div>
                     {persona.comment && (
-                      <div className="truncate text-[0.625rem] text-[var(--muted-foreground)]">{persona.comment}</div>
+                      <div className="truncate text-[0.625rem] text-(--muted-foreground)">{persona.comment}</div>
                     )}
                   </div>
                   {active && <Check size="0.75rem" />}
@@ -585,7 +585,7 @@ function MariContextMenu({
               );
             })}
             {personas.length === 0 && (
-              <div className="px-3 py-4 text-center text-[0.6875rem] italic text-[var(--muted-foreground)]">
+              <div className="px-3 py-4 text-center text-[0.6875rem] italic text-(--muted-foreground)">
                 No personas found.
               </div>
             )}
