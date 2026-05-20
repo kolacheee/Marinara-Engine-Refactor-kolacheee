@@ -46,6 +46,7 @@ export type GenerateArgs = GenerationReplayInput & {
 type StreamEvent = { type: string; data?: unknown };
 type QueryClient = ReturnType<typeof useQueryClient>;
 type GenerationStreamFactory = (args: GenerateArgs, signal: AbortSignal) => AsyncGenerator<StreamEvent>;
+const HAPTIC_COMMAND_INTERVAL_MS = 225;
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -593,6 +594,34 @@ function applyAssistantAction(rawData: unknown) {
   }
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function applyHapticAgentResult(rawData: unknown) {
+  const data = parseMaybeRecord(rawData);
+  const rawCommands = Array.isArray(data.commands) ? data.commands : [];
+  for (const rawCommand of rawCommands) {
+    if (!isRecord(rawCommand)) continue;
+    const action = readString(rawCommand.action).trim();
+    if (!action) continue;
+    try {
+      await integrationGateway.haptic.command({
+        deviceIndex:
+          rawCommand.deviceIndex === "all" || typeof rawCommand.deviceIndex === "number"
+            ? rawCommand.deviceIndex
+            : "all",
+        action,
+        ...(typeof rawCommand.intensity === "number" ? { intensity: rawCommand.intensity } : {}),
+        ...(typeof rawCommand.duration === "number" ? { duration: rawCommand.duration } : {}),
+      });
+      await delay(HAPTIC_COMMAND_INTERVAL_MS);
+    } catch (error) {
+      console.warn("Failed to send haptic agent command", error);
+    }
+  }
+}
+
 async function applyAgentResultEffects(
   queryClient: ReturnType<typeof useQueryClient>,
   chatId: string,
@@ -641,6 +670,7 @@ async function applyAgentResultEffects(
     if (pending.length) useUIStore.getState().openModal("character-card-update");
   }
 
+  if (result.type === "haptic_command" || result.agentType === "haptic") await applyHapticAgentResult(result.data);
   if (result.type === "background_change") applyBackgroundChoice(data.chosen);
   if (result.agentType === "quest") applyQuestUpdates(result.data);
   await applyTrackerResultToGameState(chatId, result);
