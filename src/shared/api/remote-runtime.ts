@@ -50,15 +50,9 @@ type RuntimeTargetInput = {
 };
 
 export type RemoteRuntimeCheckResult =
-  | { status: "connected"; authMode: RemoteRuntimeAuthMode }
-  | { status: "auth-required"; authMode: Exclude<RemoteRuntimeAuthMode, "none"> }
+  | { status: "connected"; authRequired: false }
+  | { status: "auth-required"; authRequired: true }
   | { status: "error"; authRequired: false; message: string };
-
-type RuntimeInfoResponse = {
-  ok?: boolean;
-  runtime?: string;
-  authMode?: RemoteRuntimeAuthMode;
-};
 
 function encodeBasicAuth(username: string, password: string): string {
   return `Basic ${btoa(`${decodeURIComponent(username)}:${decodeURIComponent(password)}`)}`;
@@ -119,50 +113,27 @@ export async function checkRemoteRuntime(input: RuntimeTargetInput): Promise<Rem
   const target = remoteRuntimeTargetFromInput(input);
   if (!target) return { status: "error", authRequired: false, message: "Remote runtime URL is required" };
   try {
-    const response = await fetch(`${target.baseUrl}/api/runtime`, {
+    const health = await fetch(`${target.baseUrl}/health`, {
       method: "GET",
-      headers: { accept: "application/json" },
+      headers: remoteHeaders(target, { accept: "application/json" }),
     });
-    if (!response.ok) {
-      return { status: "error", authRequired: false, message: `Runtime check returned ${response.status}` };
+    if (!health.ok) {
+      return { status: "error", authRequired: false, message: `Health check returned ${health.status}` };
     }
-    const info = (await response.json()) as RuntimeInfoResponse;
-    if (info.runtime !== "marinara-server") {
-      return { status: "error", authRequired: false, message: "Remote URL is not a Marinara runtime" };
-    }
-    if (info.authMode === "basic" || info.authMode === "bearer") {
-      return { status: "auth-required", authMode: info.authMode };
-    }
-    return { status: "connected", authMode: "none" };
-  } catch (error) {
-    return {
-      status: "error",
-      authRequired: false,
-      message: error instanceof Error ? error.message : "Remote runtime check failed",
-    };
-  }
-}
-
-export async function loginRemoteRuntime(input: RuntimeTargetInput): Promise<RemoteRuntimeCheckResult> {
-  const target = remoteRuntimeTargetFromInput(input);
-  if (!target) return { status: "error", authRequired: false, message: "Remote runtime URL is required" };
-  try {
     const response = await fetch(`${target.baseUrl}/api/invoke`, {
       method: "POST",
       headers: remoteHeaders(target, { "content-type": "application/json" }),
       body: JSON.stringify({ command: "storage_list", args: { entity: "connections" } }),
     });
-    if (response.ok) return { status: "connected", authMode: input.authMode ?? "none" };
-    if (response.status === 401) {
-      return { status: "error", authRequired: false, message: "Remote runtime rejected those credentials" };
-    }
+    if (response.ok) return { status: "connected", authRequired: false };
+    if (response.status === 401) return { status: "auth-required", authRequired: true };
     const error = await readRemoteError(response);
     return { status: "error", authRequired: false, message: error.message };
   } catch (error) {
     return {
       status: "error",
       authRequired: false,
-      message: error instanceof Error ? error.message : "Remote runtime login failed",
+      message: error instanceof Error ? error.message : "Remote runtime check failed",
     };
   }
 }

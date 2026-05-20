@@ -22,7 +22,6 @@ use tower_http::cors::CorsLayer;
 #[derive(Clone)]
 pub struct HttpState {
     app: AppState,
-    security: ServerSecurityConfig,
 }
 
 #[derive(Clone, Debug)]
@@ -52,14 +51,6 @@ impl ServerSecurityConfig {
     pub fn is_auth_enabled(&self) -> bool {
         !matches!(self.auth, ServerAuthConfig::None)
     }
-
-    fn auth_mode(&self) -> &'static str {
-        match self.auth {
-            ServerAuthConfig::None => "none",
-            ServerAuthConfig::Basic { .. } => "basic",
-            ServerAuthConfig::Bearer { .. } => "bearer",
-        }
-    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,10 +70,7 @@ pub async fn serve(
 }
 
 pub fn router(state: AppState, security: ServerSecurityConfig) -> Router {
-    let http_state = HttpState {
-        app: state,
-        security: security.clone(),
-    };
+    let protected_state = HttpState { app: state };
     let protected_routes = Router::new()
         .route("/api/invoke", post(invoke))
         .route("/api/llm/stream", post(llm_stream))
@@ -90,11 +78,11 @@ pub fn router(state: AppState, security: ServerSecurityConfig) -> Router {
         .route_layer(middleware::from_fn_with_state(
             security.clone(),
             require_auth,
-        ));
+        ))
+        .with_state(protected_state);
 
     Router::new()
         .route("/health", get(health))
-        .route("/api/runtime", get(runtime_info))
         .merge(protected_routes)
         .layer(
             CorsLayer::new()
@@ -102,19 +90,10 @@ pub fn router(state: AppState, security: ServerSecurityConfig) -> Router {
                 .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
                 .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT]),
         )
-        .with_state(http_state)
 }
 
 async fn health() -> Json<Value> {
     Json(json!({ "ok": true, "runtime": "marinara-server" }))
-}
-
-async fn runtime_info(State(state): State<HttpState>) -> Json<Value> {
-    Json(json!({
-        "ok": true,
-        "runtime": "marinara-server",
-        "authMode": state.security.auth_mode(),
-    }))
 }
 
 async fn require_auth(

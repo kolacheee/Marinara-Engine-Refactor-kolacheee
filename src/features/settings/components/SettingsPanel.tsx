@@ -16,7 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { gameAssetsApi } from "../../../shared/api/assets-api";
 import { importApi } from "../../../shared/api/import-api";
 import { profileApi } from "../../../shared/api/profile-api";
-import { checkRemoteRuntime, loginRemoteRuntime } from "../../../shared/api/remote-runtime";
+import { checkRemoteRuntime } from "../../../shared/api/remote-runtime";
 import { backgroundsApi, fontsApi } from "../../../shared/api/settings-assets-api";
 import { storageApi } from "../../../shared/api/storage-api";
 import { chatBackgroundMetadataToUrl, chatBackgroundUrlToMetadata } from "../../../shared/lib/backgrounds";
@@ -2816,6 +2816,7 @@ function AdvancedSettings() {
   const [selectedScopes, setSelectedScopes] = useState<ExpungeScope[]>(["chats"]);
   const [confirmAction, setConfirmAction] = useState<"selected" | "all" | null>(null);
   const [exportingProfile, setExportingProfile] = useState(false);
+  const [refreshingSpa, setRefreshingSpa] = useState(false);
   const [checkingRuntime, setCheckingRuntime] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState<"idle" | "connected" | "auth-required" | "error">("idle");
   const [runtimeMessage, setRuntimeMessage] = useState("");
@@ -2845,6 +2846,22 @@ function AdvancedSettings() {
     }
   };
 
+  const handleForceRefreshSpa = async () => {
+    if (refreshingSpa) {
+      return;
+    }
+
+    setRefreshingSpa(true);
+
+    try {
+      toast.info("Refreshing app...");
+      window.location.reload();
+    } catch (err) {
+      setRefreshingSpa(false);
+      toast.error(err instanceof Error ? err.message : "Failed to refresh the app");
+    }
+  };
+
   const handleConnectRemoteRuntime = async () => {
     if (checkingRuntime) return;
     const url = remoteRuntimeUrl.trim();
@@ -2852,35 +2869,32 @@ function AdvancedSettings() {
       setRemoteRuntimeUrl("");
       setRuntimeStatus("idle");
       setRuntimeMessage("");
-      toast.info("Remote runtime disabled. Reloading local runtime...");
-      window.location.reload();
+      toast.info("Remote runtime disabled. The app will use local Tauri.");
       return;
     }
 
     setCheckingRuntime(true);
+    setRuntimeStatus("idle");
+    setRuntimeMessage("");
     try {
-      const input = {
+      const result = await checkRemoteRuntime({
         url,
         authMode: remoteRuntimeAuthMode,
         username: remoteRuntimeUsername,
         password: remoteRuntimePassword,
         apiKey: remoteRuntimeApiKey,
-      };
-      const result = runtimeStatus === "auth-required" ? await loginRemoteRuntime(input) : await checkRemoteRuntime(input);
+      });
       if (result.status === "connected") {
-        setRemoteRuntimeAuthMode(result.authMode);
         setRuntimeStatus("connected");
         setRuntimeMessage("Connected");
-        toast.success("Remote runtime connected. Reloading...");
-        window.location.reload();
+        toast.success("Remote runtime connected");
         return;
       }
       if (result.status === "auth-required") {
         setRuntimeStatus("auth-required");
-        setRemoteRuntimeAuthMode(result.authMode);
-        const message = result.authMode === "bearer" ? "API key required" : "User/password required";
-        setRuntimeMessage(message);
-        toast.info(message);
+        setRuntimeMessage("Credentials required");
+        if (remoteRuntimeAuthMode === "none") setRemoteRuntimeAuthMode("basic");
+        toast.info("Remote runtime requires credentials.");
         return;
       }
       setRuntimeStatus("error");
@@ -2904,11 +2918,6 @@ function AdvancedSettings() {
 
   const isClearing = clearAllData.isPending || expungeData.isPending;
   const isAllScopesSelected = selectedScopes.length === EXPUNGE_SCOPE_OPTIONS.length;
-  const runtimeCredentialReady =
-    runtimeStatus !== "auth-required" ||
-    remoteRuntimeAuthMode === "none" ||
-    (remoteRuntimeAuthMode === "basic" && !!remoteRuntimeUsername.trim() && !!remoteRuntimePassword) ||
-    (remoteRuntimeAuthMode === "bearer" && !!remoteRuntimeApiKey.trim());
 
   const toggleScope = (scope: ExpungeScope) => {
     setSelectedScopes((current) =>
@@ -2999,10 +3008,32 @@ function AdvancedSettings() {
             placeholder="http://127.0.0.1:8787"
             className="rounded-lg bg-[var(--background)] px-3 py-2 text-xs outline-none ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)]/50 focus:ring-[var(--primary)]"
           />
-          {runtimeStatus === "auth-required" && (
+          {(runtimeStatus === "auth-required" || remoteRuntimeAuthMode !== "none") && (
             <div className="grid gap-2 rounded-lg bg-[var(--background)]/45 p-2 ring-1 ring-[var(--border)]">
-              <div className="text-[0.6875rem] font-medium text-[var(--foreground)]">
-                {remoteRuntimeAuthMode === "bearer" ? "API key" : "User and password"}
+              <div className="grid grid-cols-3 gap-1 rounded-lg bg-[var(--secondary)]/50 p-1">
+                {[
+                  { id: "basic", label: "User/Pass" },
+                  { id: "bearer", label: "API Key" },
+                  { id: "none", label: "None" },
+                ].map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => {
+                      setRemoteRuntimeAuthMode(option.id as typeof remoteRuntimeAuthMode);
+                      setRuntimeStatus("idle");
+                      setRuntimeMessage("");
+                    }}
+                    className={cn(
+                      "rounded-md px-2 py-1.5 text-[0.6875rem] font-medium transition-colors",
+                      remoteRuntimeAuthMode === option.id
+                        ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+                        : "text-[var(--muted-foreground)] hover:bg-[var(--background)] hover:text-[var(--foreground)]",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
               {remoteRuntimeAuthMode === "basic" && (
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -3037,21 +3068,24 @@ function AdvancedSettings() {
             <button
               type="button"
               onClick={() => void handleConnectRemoteRuntime()}
-              disabled={checkingRuntime || !runtimeCredentialReady}
+              disabled={checkingRuntime}
               className="flex min-w-28 items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)] transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {checkingRuntime ? <Loader2 size="0.8125rem" className="animate-spin" /> : <Power size="0.8125rem" />}
-              {checkingRuntime
-                ? "Connecting…"
-                : runtimeStatus === "auth-required"
-                  ? "Login & Reload"
-                  : remoteRuntimeUrl.trim()
-                    ? "Connect & Reload"
-                    : "Use Local & Reload"}
+              {checkingRuntime ? "Connecting…" : "Connect"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleForceRefreshSpa()}
+              disabled={refreshingSpa}
+              className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--background)]/70 px-3 py-2 text-xs font-medium text-[var(--foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {refreshingSpa ? <Loader2 size="0.8125rem" className="animate-spin" /> : <RefreshCw size="0.8125rem" />}
+              {refreshingSpa ? "Reloading…" : "Reload App"}
             </button>
             <HelpTooltip
               side="bottom"
-              text="Connect discovers the runtime auth mode. If no credentials are needed, the app reloads immediately. If credentials are needed, enter them and log in to reload."
+              text="Connect checks the remote runtime before supported calls use it. Reload restarts the UI after changing runtime targets."
             />
           </div>
         </div>
