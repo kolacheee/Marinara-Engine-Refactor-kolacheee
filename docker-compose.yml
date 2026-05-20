@@ -1,0 +1,19 @@
+services:
+  marinara-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: marinara-engine-server:local
+    container_name: marinara-engine-server
+    restart: unless-stopped
+    environment:
+      MARINARA_SERVER_ADDR: 0.0.0.0:8787
+      MARINARA_DATA_DIR: /data
+    ports:
+      - "8787:8787"
+    volumes:
+      - marinara-server-data:/data
+
+volumes:
+  marinara-server-data:
+

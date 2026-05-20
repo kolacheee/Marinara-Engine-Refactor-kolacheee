@@ -92,6 +92,28 @@
           <code>beforeBuildCommand</code> to <code>pnpm build</code>.
         </p>
 
+        <h2>Run The Remote Rust Runtime</h2>
+        <p>
+          The remote runtime hosts the Rust API only. It does not serve the
+          React UI. Desktop clients can point Settings &gt; Advanced &gt; Remote
+          Runtime URL at this server.
+        </p>
+        <pre><code>cargo run --manifest-path src-tauri/Cargo.toml --bin marinara-server</code></pre>
+        <p>By default it listens on:</p>
+        <pre><code>http://127.0.0.1:8787</code></pre>
+        <p>Override the bind address and data directory with:</p>
+        <pre><code>MARINARA_SERVER_ADDR=0.0.0.0:8787
+MARINARA_DATA_DIR=/path/to/data</code></pre>
+
+        <h2>Run The Remote Runtime With Docker</h2>
+        <p>Build and start the Rust API server with Docker Compose:</p>
+        <pre><code>docker compose up --build</code></pre>
+        <p>The compose service exposes:</p>
+        <pre><code>http://127.0.0.1:8787</code></pre>
+        <p>To build directly from GitHub, use Docker's remote git context:</p>
+        <pre><code>docker build -t marinara-engine-server https://github.com/Pasta-Devs/Marinara-Engine-Refactor.git#main
+docker run --rm -p 8787:8787 -v marinara-server-data:/data marinara-engine-server</code></pre>
+
         <h2>Checks</h2>
         <table>
           <thead>
