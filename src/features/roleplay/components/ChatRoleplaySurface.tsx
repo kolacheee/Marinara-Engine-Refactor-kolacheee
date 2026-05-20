@@ -10,7 +10,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import type { ChatSummaryEntry, ChatSummaryPromptTemplate, SpritePlacement, SpriteSide } from "../../../engine/contracts/types/chat";
+import type { SpritePlacement, SpriteSide } from "../../../engine/contracts/types/chat";
 import type { SceneForkMode } from "../../../engine/contracts/types/scene";
 import {
   FolderOpen,
@@ -326,20 +326,12 @@ function ToolbarMenu({ children }: { children: ReactNode }) {
 function SummaryButton({
   chatId,
   summary,
-  summaryEntries,
-  summaryPromptTemplates,
-  activeSummaryPromptTemplateId,
   summaryContextSize,
-  totalMessageCount,
   onContextSizeChange,
 }: {
   chatId: string | null;
   summary: string | null;
-  summaryEntries?: ChatSummaryEntry[];
-  summaryPromptTemplates?: ChatSummaryPromptTemplate[];
-  activeSummaryPromptTemplateId?: string | null;
   summaryContextSize: number;
-  totalMessageCount: number;
   onContextSizeChange: (size: number) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -369,11 +361,7 @@ function SummaryButton({
           <SummaryPopover
             chatId={chatId}
             summary={summary}
-            summaryEntries={summaryEntries}
-            promptTemplates={summaryPromptTemplates}
-            activePromptTemplateId={activeSummaryPromptTemplateId}
             contextSize={summaryContextSize}
-            totalMessageCount={totalMessageCount}
             onContextSizeChange={onContextSizeChange}
             onClose={() => setOpen(false)}
           />
@@ -683,10 +671,9 @@ export function ChatRoleplaySurface({
   const linkedChatName = chat?.connectedChatId
     ? getConnectedChatDisplayName(allChats?.find((c) => c.id === chat.connectedChatId))
     : undefined;
-  const isConcludedScene = chatMeta.sceneStatus === "concluded";
-  const concludedSceneLabel = "This scene has concluded. Convert or reopen it before sending new messages.";
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const rightPanelOpen = useUIStore((s) => s.rightPanelOpen);
+  const isConcludedScene = chatMeta.sceneStatus === "concluded";
   const messageActions = isConcludedScene
     ? {
         onDelete: undefined,
@@ -785,17 +772,7 @@ export function ChatRoleplaySurface({
                     <SummaryButton
                       chatId={chat?.id ?? null}
                       summary={chatMeta.summary ?? null}
-                      summaryEntries={Array.isArray(chatMeta.summaryEntries) ? chatMeta.summaryEntries : []}
-                      summaryPromptTemplates={
-                        Array.isArray(chatMeta.summaryPromptTemplates) ? chatMeta.summaryPromptTemplates : []
-                      }
-                      activeSummaryPromptTemplateId={
-                        typeof chatMeta.activeSummaryPromptTemplateId === "string"
-                          ? chatMeta.activeSummaryPromptTemplateId
-                          : null
-                      }
                       summaryContextSize={summaryContextSize}
-                      totalMessageCount={messages?.length ?? 0}
                       onContextSizeChange={onSummaryContextSizeChange}
                     />
                     <ActiveWorldInfoButton chatId={chat?.id ?? null} />
@@ -881,17 +858,7 @@ export function ChatRoleplaySurface({
                         <SummaryButton
                           chatId={chat?.id ?? null}
                           summary={chatMeta.summary ?? null}
-                          summaryEntries={Array.isArray(chatMeta.summaryEntries) ? chatMeta.summaryEntries : []}
-                          summaryPromptTemplates={
-                            Array.isArray(chatMeta.summaryPromptTemplates) ? chatMeta.summaryPromptTemplates : []
-                          }
-                          activeSummaryPromptTemplateId={
-                            typeof chatMeta.activeSummaryPromptTemplateId === "string"
-                              ? chatMeta.activeSummaryPromptTemplateId
-                              : null
-                          }
                           summaryContextSize={summaryContextSize}
-                          totalMessageCount={messages?.length ?? 0}
                           onContextSizeChange={onSummaryContextSizeChange}
                         />
                         <ActiveWorldInfoButton chatId={chat?.id ?? null} />
@@ -949,17 +916,7 @@ export function ChatRoleplaySurface({
                       <SummaryButton
                         chatId={chat?.id ?? null}
                         summary={chatMeta.summary ?? null}
-                        summaryEntries={Array.isArray(chatMeta.summaryEntries) ? chatMeta.summaryEntries : []}
-                        summaryPromptTemplates={
-                          Array.isArray(chatMeta.summaryPromptTemplates) ? chatMeta.summaryPromptTemplates : []
-                        }
-                        activeSummaryPromptTemplateId={
-                          typeof chatMeta.activeSummaryPromptTemplateId === "string"
-                            ? chatMeta.activeSummaryPromptTemplateId
-                            : null
-                        }
                         summaryContextSize={summaryContextSize}
-                        totalMessageCount={messages?.length ?? 0}
                         onContextSizeChange={onSummaryContextSizeChange}
                       />
                       <ActiveWorldInfoButton chatId={chat?.id ?? null} />
@@ -1099,7 +1056,7 @@ export function ChatRoleplaySurface({
                   );
                 })}
 
-                {!isStreaming && <CyoaChoices messages={messages} readOnly={isConcludedScene} />}
+                {!isConcludedScene && !isStreaming && <CyoaChoices messages={messages} />}
 
                 {isStreaming && !regenerateMessageId && (
                   <StreamingIndicator
@@ -1147,31 +1104,31 @@ export function ChatRoleplaySurface({
                     </button>
                   </div>
                 )}
-                <ChatInput
-                  key={activeChatId}
-                  mode={isRoleplay ? "roleplay" : "conversation"}
-                  readOnly={isConcludedScene}
-                  readOnlyLabel={concludedSceneLabel}
-                  characterNames={characterNames}
-                  groupResponseOrder={
-                    chatCharIds.length > 1 && groupChatMode === "individual"
-                      ? (chatMeta.groupResponseOrder ?? "sequential")
-                      : undefined
-                  }
-                  chatCharacters={chatCharIds
-                    .filter((id) => characterMap.has(id))
-                    .map((id) => {
-                      const info = characterMap.get(id)!;
-                      return {
-                        id,
-                        name: info.name,
-                        avatarUrl: info.avatarUrl ?? null,
-                        avatarCrop: info.avatarCrop ?? null,
-                      };
-                  })}
-                  onExpressionChange={onExpressionChange}
-                  onPeekPrompt={onPeekPrompt}
-                />
+                {!isConcludedScene && (
+                  <ChatInput
+                    key={activeChatId}
+                    mode={isRoleplay ? "roleplay" : "conversation"}
+                    characterNames={characterNames}
+                    groupResponseOrder={
+                      chatCharIds.length > 1 && groupChatMode === "individual"
+                        ? (chatMeta.groupResponseOrder ?? "sequential")
+                        : undefined
+                    }
+                    chatCharacters={chatCharIds
+                      .filter((id) => characterMap.has(id))
+                      .map((id) => {
+                        const info = characterMap.get(id)!;
+                        return {
+                          id,
+                          name: info.name,
+                          avatarUrl: info.avatarUrl ?? null,
+                          avatarCrop: info.avatarCrop ?? null,
+                        };
+                      })}
+                    onExpressionChange={onExpressionChange}
+                    onPeekPrompt={onPeekPrompt}
+                  />
+                )}
               </div>
             </div>
           </div>

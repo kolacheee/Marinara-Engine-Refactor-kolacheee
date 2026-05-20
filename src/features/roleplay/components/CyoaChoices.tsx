@@ -17,7 +17,6 @@ type CyoaChoice = {
 
 interface Props {
   messages?: Message[];
-  readOnly?: boolean;
 }
 
 function normalizeChoices(choices: CyoaChoice[]) {
@@ -29,7 +28,7 @@ function normalizeChoices(choices: CyoaChoice[]) {
     .filter((choice) => choice.text.length > 0);
 }
 
-export function CyoaChoices({ messages, readOnly = false }: Props) {
+export function CyoaChoices({ messages }: Props) {
   const choices = useAgentStore((s) => s.cyoaChoices);
   const choicesChatId = useAgentStore((s) => s.cyoaChoicesChatId);
   const setCyoaChoices = useAgentStore((s) => s.setCyoaChoices);
@@ -141,7 +140,7 @@ export function CyoaChoices({ messages, readOnly = false }: Props) {
 
   const handleChoice = useCallback(
     async (text: string) => {
-      if (!activeChatId || isStreaming || isEditing || readOnly) return;
+      if (!activeChatId || isStreaming || isEditing) return;
       clearChoicesForActiveChat();
       if (impersonateCyoaChoices) {
         const { impersonatePresetId, impersonateConnectionId, impersonateBlockAgents, impersonatePromptTemplate } =
@@ -166,11 +165,11 @@ export function CyoaChoices({ messages, readOnly = false }: Props) {
         userMessage: text,
       });
     },
-    [activeChatId, isStreaming, isEditing, readOnly, impersonateCyoaChoices, clearChoicesForActiveChat, generate],
+    [activeChatId, isStreaming, isEditing, impersonateCyoaChoices, clearChoicesForActiveChat, generate],
   );
 
   const handleReroll = useCallback(async () => {
-    if (!activeChatId || isStreaming || isEditing || isRerolling || readOnly) return;
+    if (!activeChatId || isStreaming || isEditing || isRerolling) return;
     setIsRerolling(true);
     try {
       // Re-runs ONLY the CYOA agent with fresh context (latest messages + last
@@ -180,7 +179,7 @@ export function CyoaChoices({ messages, readOnly = false }: Props) {
     } finally {
       setIsRerolling(false);
     }
-  }, [activeChatId, isStreaming, isEditing, isRerolling, readOnly, retryAgents]);
+  }, [activeChatId, isStreaming, isEditing, isRerolling, retryAgents]);
 
   const handleStartEdit = useCallback(() => {
     setDraftChoices(choices.map((choice) => ({ ...choice })));
@@ -231,7 +230,7 @@ export function CyoaChoices({ messages, readOnly = false }: Props) {
         <button
           type="button"
           onClick={isEditing ? handleCancelEdit : handleStartEdit}
-          disabled={readOnly || isStreaming || isRerolling || updateMessageExtra.isPending}
+          disabled={isStreaming || isRerolling || updateMessageExtra.isPending}
           className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--muted)]/20 px-2 py-1 text-[0.5625rem] text-[var(--foreground)]/60 transition-all hover:border-[var(--border)] hover:bg-[var(--muted)]/40 hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-black/35 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white/80"
           title={isEditing ? "Cancel editing choices" : "Edit CYOA choices"}
         >
@@ -243,7 +242,7 @@ export function CyoaChoices({ messages, readOnly = false }: Props) {
           onClick={() => {
             void handleReroll();
           }}
-          disabled={readOnly || isStreaming || isEditing || isRerolling || updateMessageExtra.isPending}
+          disabled={isStreaming || isEditing || isRerolling || updateMessageExtra.isPending}
           className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--muted)]/20 px-2 py-1 text-[0.5625rem] text-[var(--foreground)]/60 transition-all hover:border-[var(--border)] hover:bg-[var(--muted)]/40 hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-black/35 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white/80"
           title="Re-roll CYOA choices using the latest chat context"
         >
@@ -308,7 +307,7 @@ export function CyoaChoices({ messages, readOnly = false }: Props) {
               key={i}
               type="button"
               onClick={() => handleChoice(choice.text)}
-              disabled={readOnly || isStreaming || isRerolling}
+              disabled={isStreaming || isRerolling}
               className="group relative rounded-xl border border-[var(--border)] bg-[var(--card)]/80 px-4 py-2.5 text-left backdrop-blur-md transition-all hover:border-purple-400/40 hover:bg-purple-500/10 hover:shadow-lg hover:shadow-purple-500/5 active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:bg-black/50"
             >
               <span className="block text-[0.6875rem] font-semibold text-purple-700 group-hover:text-purple-600 dark:text-purple-300/90 dark:group-hover:text-purple-200">

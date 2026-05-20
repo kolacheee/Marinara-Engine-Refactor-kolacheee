@@ -301,7 +301,6 @@ export const ConversationMessage = memo(function ConversationMessage({
   const guideGenerations = useUIStore((s) => s.guideGenerations);
   const chatFontSize = useUIStore((s) => s.chatFontSize);
   const showMessageNumbers = useUIStore((s) => s.showMessageNumbers);
-  const collapseHiddenAiMessages = useUIStore((s) => s.collapseHiddenAiMessages);
   const messageTextStyle = useMemo<CSSProperties>(() => ({ fontSize: `${chatFontSize}px` }), [chatFontSize]);
   const isGuided = guideGenerations && hasInput;
   const regenerateButtonTitle = isGuided ? "Regenerate (guided)" : "Regenerate";
@@ -554,28 +553,6 @@ export const ConversationMessage = memo(function ConversationMessage({
     }
     setEditing(false);
   }, [message.content, message.id, onEdit]);
-
-  if (isHiddenFromAI && collapseHiddenAiMessages && !editing) {
-    return (
-      <div
-        className="group relative flex items-center gap-2 px-4 py-1 text-[0.6875rem] text-amber-300/75"
-        data-message-id={message.id}
-      >
-        <div className="ml-14 flex min-w-0 items-center gap-2 rounded-md bg-amber-400/10 px-2 py-1 ring-1 ring-amber-400/15">
-          <EyeOff size="0.75rem" className="shrink-0" />
-          <span className="truncate">Hidden from AI</span>
-          {onToggleHiddenFromAI && (
-            <button
-              onClick={() => onToggleHiddenFromAI(message.id, true)}
-              className="rounded px-1.5 py-0.5 text-[0.625rem] font-medium text-amber-200 hover:bg-amber-400/15"
-            >
-              Unhide
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   // System messages — minimal display
   if (isSystem) {

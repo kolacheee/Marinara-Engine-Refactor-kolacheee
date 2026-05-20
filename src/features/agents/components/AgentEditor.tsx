@@ -1524,8 +1524,9 @@ export function AgentEditor() {
                   <p className="text-[0.625rem] text-white/30 leading-relaxed">
                     Spotify only accepts <code className="text-white/40">https://</code> redirect URIs or loopback (
                     <code className="text-white/40">http://127.0.0.1</code>). If you&apos;re running Marinara on another
-                    machine, register the loopback URI shown above and use the paste-back fallback that appears under
-                    the Connect button.
+                    machine over plain HTTP, register the loopback URI anyway and use the paste-back fallback that
+                    appears under the Connect button — or set{" "}
+                    <code className="text-white/40">SPOTIFY_REDIRECT_URI</code> to your HTTPS URL.
                   </p>
                 </div>
               </div>

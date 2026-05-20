@@ -64,13 +64,9 @@ type ConnectionRowData = {
   name: string;
   provider: string;
   model: string;
-  useForRandom?: string | boolean | null;
+  useForRandom?: string;
   folderId?: string | null;
 };
-
-function isStoredBooleanTrue(value: unknown): boolean {
-  return value === true || value === "true" || value === "1";
-}
 
 function ConnectionRow({
   conn,
@@ -90,7 +86,7 @@ function ConnectionRow({
   const updateConnection = useUpdateConnection();
   const openConnectionDetail = useUIStore((s) => s.openConnectionDetail);
 
-  const inRandomPool = isStoredBooleanTrue(conn.useForRandom);
+  const inRandomPool = conn.useForRandom === "true";
   const colors = PROVIDER_COLORS[conn.provider] ?? DEFAULT_COLOR;
 
   return (

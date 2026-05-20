@@ -81,7 +81,6 @@ export function partializeUiState(state: UIState) {
     showModelName: state.showModelName,
     showTokenUsage: state.showTokenUsage,
     showMessageNumbers: state.showMessageNumbers,
-    collapseHiddenAiMessages: state.collapseHiddenAiMessages,
     guideGenerations: state.guideGenerations,
     showQuickRepliesMenu: state.showQuickRepliesMenu,
     showQuickReplyPostOnly: state.showQuickReplyPostOnly,

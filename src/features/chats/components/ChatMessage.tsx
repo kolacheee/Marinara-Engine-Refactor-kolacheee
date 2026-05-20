@@ -21,7 +21,6 @@ import {
   X,
   Flag,
   Eye,
-  EyeOff,
   ScrollText,
   Circle,
   Brain,
@@ -638,13 +637,12 @@ export const ChatMessage = memo(function ChatMessage({
     roleplayAvatarScale,
     textStrokeWidth,
     textStrokeColor,
-      showModelName,
-      showTokenUsage,
-      showMessageNumbers,
-      collapseHiddenAiMessages,
-      guideGenerations,
-      boldDialogue,
-      theme,
+    showModelName,
+    showTokenUsage,
+    showMessageNumbers,
+    guideGenerations,
+    boldDialogue,
+    theme,
   } = useUIStore(
     useShallow((s) => ({
       chatFontSize: s.chatFontSize,
@@ -657,7 +655,6 @@ export const ChatMessage = memo(function ChatMessage({
       showModelName: s.showModelName,
       showTokenUsage: s.showTokenUsage,
       showMessageNumbers: s.showMessageNumbers,
-      collapseHiddenAiMessages: s.collapseHiddenAiMessages,
       guideGenerations: s.guideGenerations,
       boldDialogue: s.boldDialogue ?? true,
       theme: s.theme,
@@ -1272,29 +1269,6 @@ export const ChatMessage = memo(function ChatMessage({
       )}
     </>
   );
-
-  if (isHiddenFromAI && collapseHiddenAiMessages && !editing) {
-    return (
-      <div
-        className="mari-message group relative flex items-center gap-2 px-4 py-1 text-[0.6875rem] text-amber-300/75"
-        data-message-id={message.id}
-        data-message-role={message.role}
-      >
-        <div className="ml-12 flex min-w-0 items-center gap-2 rounded-md bg-amber-400/10 px-2 py-1 ring-1 ring-amber-400/15">
-          <EyeOff size="0.75rem" className="shrink-0" />
-          <span className="truncate">Hidden from AI</span>
-          {onToggleHiddenFromAI && (
-            <button
-              onClick={() => onToggleHiddenFromAI(message.id, true)}
-              className="rounded px-1.5 py-0.5 text-[0.625rem] font-medium text-amber-200 hover:bg-amber-400/15"
-            >
-              Unhide
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   // ─── System messages (shared across modes) ───
   if (isSystem) {

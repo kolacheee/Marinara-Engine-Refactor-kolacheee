@@ -1,6 +1,6 @@
 use marinara_assets::AssetService;
 use marinara_core::{AppError, AppResult};
-use marinara_storage::{memory::MemoryStore, FileStorage};
+use marinara_storage::FileStorage;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -14,7 +14,6 @@ pub struct AppState {
     pub storage: FileStorage,
     pub game_assets: AssetService,
     pub backgrounds: AssetService,
-    pub memory: MemoryStore,
     pub data_dir: PathBuf,
     llm_stream_cancellations: Arc<Mutex<LlmStreamCancellations>>,
 }
@@ -35,7 +34,6 @@ impl AppState {
         let storage = FileStorage::new(data_dir.join("data"))?;
         let game_assets = AssetService::new(data_dir.join("game-assets"))?;
         let backgrounds = AssetService::new(data_dir.join("backgrounds"))?;
-        let memory = MemoryStore::new(&data_dir);
         let mut default_data_roots = Vec::new();
         if let Ok(resource_dir) = app.path().resource_dir() {
             default_data_roots.push(resource_dir.join("resources").join("default-data"));
@@ -58,7 +56,6 @@ impl AppState {
             storage,
             game_assets,
             backgrounds,
-            memory,
             data_dir,
             llm_stream_cancellations: Arc::new(Mutex::new(LlmStreamCancellations::default())),
         })

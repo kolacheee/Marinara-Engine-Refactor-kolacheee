@@ -2,7 +2,6 @@ import type {
   ChatSummaryEntry,
   ChatSummaryEntryKind,
   ChatSummaryEntryOrigin,
-  ChatSummaryPromptTemplate,
   ChatSummaryEntrySource,
 } from "../../contracts/types/chat.js";
 
@@ -221,48 +220,6 @@ export function normalizeChatSummaryEntries(
     });
 
   return sortChatSummaryEntries(entries);
-}
-
-export function normalizeChatSummaryPromptTemplates(rawTemplates: unknown): ChatSummaryPromptTemplate[] {
-  if (!Array.isArray(rawTemplates)) return [];
-  const seen = new Set<string>();
-  const templates: ChatSummaryPromptTemplate[] = [];
-  for (const raw of rawTemplates) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
-    const value = raw as Record<string, unknown>;
-    const id = trimString(value.id);
-    const name = trimString(value.name);
-    const prompt = trimString(value.prompt);
-    if (!id || !name || !prompt || seen.has(id)) continue;
-    seen.add(id);
-    templates.push({ id, name, prompt });
-  }
-  return templates;
-}
-
-export function ensureSummaryEntryMetadata(metadata: Record<string, unknown>, options: ChatSummaryEntryNormalizeOptions = {}) {
-  const entries = normalizeChatSummaryEntries(metadata.summaryEntries, options);
-  const summary = typeof metadata.summary === "string" ? metadata.summary.trim() : "";
-  if (entries.length === 0 && summary) {
-    const legacyEntry = createChatSummaryEntry(
-      {
-        content: summary,
-        origin: "manual",
-        sourceMode: "last",
-        title: "Legacy summary",
-      },
-      options,
-    );
-    const nextEntries = sortChatSummaryEntries([legacyEntry]);
-    return {
-      entries: nextEntries,
-      summary: compileChatSummaryEntries(nextEntries),
-    };
-  }
-  return {
-    entries,
-    summary: compileChatSummaryEntries(entries) ?? (summary || null),
-  };
 }
 
 export function compileChatSummaryEntries(entries: ChatSummaryEntry[]): string | null {

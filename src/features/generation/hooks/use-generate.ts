@@ -94,17 +94,6 @@ function optimisticUserMessage(args: GenerateArgs): Message | null {
   };
 }
 
-async function assertChatCanGenerate(queryClient: QueryClient, chatId: string) {
-  let chat = queryClient.getQueryData<Chat>(chatKeys.detail(chatId));
-  if (!chat) {
-    chat = (await storageApi.get("chats", chatId)) as Chat;
-  }
-  const metadata = parseMaybeRecord(chat?.metadata);
-  if (metadata.sceneStatus === "concluded") {
-    throw new Error("This scene is concluded. Convert or reopen it before sending new messages.");
-  }
-}
-
 function insertOptimisticUserMessage(queryClient: QueryClient, args: GenerateArgs) {
   const optimistic = optimisticUserMessage(args);
   if (!optimistic) return;
@@ -696,7 +685,6 @@ export async function runGenerationWithUi(
   const chatId = args.chatId;
   const regenerateMessageId = readString(args.regenerateMessageId).trim() || null;
   const controller = new AbortController();
-  await assertChatCanGenerate(queryClient, chatId);
   const chatStore = useChatStore.getState();
   chatStore.setAbortController(chatId, controller);
   chatStore.setStreaming(true, chatId);
@@ -854,9 +842,8 @@ export function useGenerate() {
 
   const retryAgents = useCallback(
     async (chatId: string, agentTypes?: string[], options?: Record<string, unknown>) => {
+      useAgentStore.getState().setProcessing(true);
       try {
-        await assertChatCanGenerate(queryClient, chatId);
-        useAgentStore.getState().setProcessing(true);
         const results = await retryGenerationAgents(
           { storage: storageApi, llm: llmApi, integrations: integrationGateway },
           { chatId, agentTypes, options },

@@ -6,10 +6,6 @@ export function requireRecord(value: unknown, label: string): JsonRecord {
   throw new Error(`${label} was not found`);
 }
 
-function isStoredBooleanTrue(value: unknown): boolean {
-  return value === true || value === "true" || value === "1";
-}
-
 export async function resolveGenerationConnection(
   storage: StorageGateway,
   chat: JsonRecord,
@@ -23,8 +19,7 @@ export async function resolveGenerationConnection(
 
   const connections = await storage.list<JsonRecord>("connections");
   const selected =
-    connections.find((connection) => isStoredBooleanTrue(connection.isDefault) || isStoredBooleanTrue(connection.default)) ??
-    connections[0];
+    connections.find((connection) => connection.isDefault === true || connection.default === true) ?? connections[0];
   if (!selected) throw new Error("No LLM connection is configured");
   return selected;
 }

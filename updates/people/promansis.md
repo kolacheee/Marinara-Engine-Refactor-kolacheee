@@ -161,11 +161,11 @@ The agent result is recorded, but nothing reaches `integrationGateway.haptic.com
 - Follow-up fixed multi-command patterns by serializing agent haptic commands above the native 200ms rate limit.
 - Verification: `pnpm typecheck`; `cargo check --manifest-path src-tauri/Cargo.toml`.
 
-## Profile import leaves stale asset files behind
+## Haptic inflate actions are advertised but execute as vibrate or fail
 
-- Status: In review
+- Status: Done
 - Owner: Promansis
-- Impact area: UI | Rust capability
+- Impact area: engine | shared/api | Rust capability
 - Reported: 2026-05-19
 - Last updated: 2026-05-19
 

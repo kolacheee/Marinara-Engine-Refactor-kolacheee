@@ -111,8 +111,6 @@ interface ChatInputProps {
   mode?: "conversation" | "roleplay";
   characterNames?: string[];
   groupResponseOrder?: string;
-  readOnly?: boolean;
-  readOnlyLabel?: string;
   chatCharacters?: Array<{
     id: string;
     name: string;
@@ -131,8 +129,6 @@ export const ChatInput = memo(function ChatInput({
   mode = "conversation",
   characterNames = [],
   groupResponseOrder,
-  readOnly = false,
-  readOnlyLabel = "This chat is read-only.",
   chatCharacters,
   onExpressionChange,
   onPeekPrompt,
@@ -468,10 +464,6 @@ export const ChatInput = memo(function ChatInput({
 
   const handleSend = useCallback(async () => {
     const raw = getValue();
-    if (readOnly) {
-      toast.info(readOnlyLabel);
-      return;
-    }
     if (!activeChatId || isStreaming) return;
     if (isReadingAttachments) {
       toast.info("Still reading attached files. Send will be ready in a moment.");
@@ -658,8 +650,6 @@ export const ChatInput = memo(function ChatInput({
     setInputDraft,
     completions,
     onPeekPrompt,
-    readOnly,
-    readOnlyLabel,
   ]);
 
   const runQuickSlashCommand = useCallback(
@@ -726,10 +716,6 @@ export const ChatInput = memo(function ChatInput({
   );
 
   const handleImpersonateQuickButton = useCallback(async () => {
-    if (readOnly) {
-      toast.info(readOnlyLabel);
-      return;
-    }
     if (!activeChatId || isStreaming) return;
     if (hasPendingAttachments) {
       toast.info("Clear or send attachments before using quick impersonate.");
@@ -738,13 +724,9 @@ export const ChatInput = memo(function ChatInput({
     const text = textareaRef.current?.value?.trim() ?? "";
     if (!text) return;
     await runQuickSlashCommand(`/impersonate ${text}`, "Impersonate failed");
-  }, [activeChatId, isStreaming, hasPendingAttachments, runQuickSlashCommand, readOnly, readOnlyLabel]);
+  }, [activeChatId, isStreaming, hasPendingAttachments, runQuickSlashCommand]);
 
   const handlePostOnlyButton = useCallback(async () => {
-    if (readOnly) {
-      toast.info(readOnlyLabel);
-      return;
-    }
     if (!activeChatId || isStreaming) return;
     const submittingChatId = activeChatId;
     if (isReadingAttachments) {
@@ -861,15 +843,9 @@ export const ChatInput = memo(function ChatInput({
     createMessage,
     deleteMessage,
     updateMessageExtra,
-    readOnly,
-    readOnlyLabel,
   ]);
 
   const handleGuidedGenerationButton = useCallback(async () => {
-    if (readOnly) {
-      toast.info(readOnlyLabel);
-      return;
-    }
     if (!activeChatId || isStreaming) return;
     if (requiresManualGuideTarget) {
       toast.info("Choose a character from the reply picker to guide a specific reply.");
@@ -882,21 +858,12 @@ export const ChatInput = memo(function ChatInput({
     const text = textareaRef.current?.value?.trim() ?? "";
     if (!text) return;
     await runQuickSlashCommand(`/guided ${text}`, "Guided generation failed");
-  }, [
-    activeChatId,
-    isStreaming,
-    requiresManualGuideTarget,
-    hasPendingAttachments,
-    runQuickSlashCommand,
-    readOnly,
-    readOnlyLabel,
-  ]);
+  }, [activeChatId, isStreaming, requiresManualGuideTarget, hasPendingAttachments, runQuickSlashCommand]);
 
   const quickReplyActions = useMemo<QuickReplyAction[]>(() => {
     const actions: QuickReplyAction[] = [];
     const getPostOnlyDisabledReason = () => {
       if (!activeChatId) return "Select or create a chat first.";
-      if (readOnly) return readOnlyLabel;
       if (isStreaming) return "Wait for the current stream to finish.";
       if (isReadingAttachments) return "Still reading attached files.";
       if (!hasInput && attachments.length === 0) return "Type a draft first.";
@@ -904,7 +871,6 @@ export const ChatInput = memo(function ChatInput({
     };
     const getGuideDisabledReason = () => {
       if (!activeChatId) return "Select or create a chat first.";
-      if (readOnly) return readOnlyLabel;
       if (isStreaming) return "Wait for the current stream to finish.";
       if (requiresManualGuideTarget) return "Choose a character from the reply picker.";
       if (hasPendingAttachments) return "Clear or post attachments first.";
@@ -913,7 +879,6 @@ export const ChatInput = memo(function ChatInput({
     };
     const getImpersonateDisabledReason = () => {
       if (!activeChatId) return "Select or create a chat first.";
-      if (readOnly) return readOnlyLabel;
       if (isStreaming) return "Wait for the current stream to finish.";
       if (hasPendingAttachments) return "Clear or post attachments first.";
       if (!hasInput) return "Type a direction first.";
@@ -925,7 +890,7 @@ export const ChatInput = memo(function ChatInput({
         label: "Post only",
         description: "Add your message without a reply",
         icon: <FileText size="0.875rem" />,
-        disabled: readOnly || !activeChatId || isStreaming || isReadingAttachments || (!hasInput && attachments.length === 0),
+        disabled: !activeChatId || isStreaming || isReadingAttachments || (!hasInput && attachments.length === 0),
         disabledReason: getPostOnlyDisabledReason(),
         onSelect: handlePostOnlyButton,
       });
@@ -936,7 +901,7 @@ export const ChatInput = memo(function ChatInput({
         label: "Guide reply",
         description: "Send as /guided direction",
         icon: <WandSparkles size="0.875rem" />,
-        disabled: readOnly || !activeChatId || isStreaming || requiresManualGuideTarget || !hasInput || hasPendingAttachments,
+        disabled: !activeChatId || isStreaming || requiresManualGuideTarget || !hasInput || hasPendingAttachments,
         disabledReason: getGuideDisabledReason(),
         onSelect: handleGuidedGenerationButton,
       });
@@ -947,7 +912,7 @@ export const ChatInput = memo(function ChatInput({
         label: "Impersonate",
         description: "Generate as your persona",
         icon: <UserCheck size="0.875rem" />,
-        disabled: readOnly || !activeChatId || isStreaming || !hasInput || hasPendingAttachments,
+        disabled: !activeChatId || isStreaming || !hasInput || hasPendingAttachments,
         disabledReason: getImpersonateDisabledReason(),
         onSelect: handleImpersonateQuickButton,
       });
@@ -967,8 +932,6 @@ export const ChatInput = memo(function ChatInput({
     handlePostOnlyButton,
     handleGuidedGenerationButton,
     handleImpersonateQuickButton,
-    readOnly,
-    readOnlyLabel,
   ]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -1083,10 +1046,6 @@ export const ChatInput = memo(function ChatInput({
   // Character picker: trigger a response from a specific character (manual mode)
   const handleCharacterResponse = useCallback(
     async (characterId: string) => {
-      if (readOnly) {
-        toast.info(readOnlyLabel);
-        return;
-      }
       if (!activeChatId || isStreaming) return;
       setCharPickerOpen(false);
       setCharPickerPos(null);
@@ -1107,7 +1066,7 @@ export const ChatInput = memo(function ChatInput({
         toast.error(msg);
       }
     },
-    [activeChatId, isStreaming, generate, hasInput, currentInput, guideGenerations, readOnly, readOnlyLabel],
+    [activeChatId, isStreaming, generate, hasInput, currentInput, guideGenerations],
   );
 
   // Close character picker on outside click
@@ -1238,12 +1197,6 @@ export const ChatInput = memo(function ChatInput({
       {/* Feedback toast */}
       {feedback && <SlashCommandFeedback feedback={feedback} onDismiss={() => setFeedback(null)} className="mb-2" />}
 
-      {readOnly && (
-        <div className="mb-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-center text-xs text-[var(--muted-foreground)]">
-          {readOnlyLabel}
-        </div>
-      )}
-
       {/* Attachment previews */}
       {(attachments.length > 0 || isReadingAttachments) && (
         <div className="mb-2 flex flex-wrap gap-2">
@@ -1304,7 +1257,7 @@ export const ChatInput = memo(function ChatInput({
         />
         <button
           onClick={() => fileInputRef.current?.click()}
-          disabled={!activeChatId || readOnly}
+          disabled={!activeChatId}
           className={cn(
             "rounded-lg p-1.5 transition-all active:scale-90",
             attachments.length
@@ -1338,7 +1291,7 @@ export const ChatInput = memo(function ChatInput({
                 : "Type here, / for commands."
               : "Select a chat first"
           }
-          disabled={!activeChatId || readOnly}
+          disabled={!activeChatId}
           rows={1}
           spellCheck
           autoCorrect="on"
@@ -1374,7 +1327,6 @@ export const ChatInput = memo(function ChatInput({
           <button
             ref={charPickerBtnRef}
             onClick={() => setCharPickerOpen((v) => !v)}
-            disabled={readOnly}
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
               guideGenerations && hasInput
@@ -1393,7 +1345,7 @@ export const ChatInput = memo(function ChatInput({
           <button
             type="button"
             onClick={() => void handleTranslateDraft()}
-            disabled={readOnly || !activeChatId || !hasInput || isStreaming || isTranslatingDraft}
+            disabled={!activeChatId || !hasInput || isStreaming || isTranslatingDraft}
             className={cn(
               "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200",
               hasInput && !isStreaming && !isTranslatingDraft
@@ -1408,7 +1360,7 @@ export const ChatInput = memo(function ChatInput({
 
         {speechToTextEnabled && (
           <SpeechToTextButton
-            disabled={!activeChatId || readOnly}
+            disabled={!activeChatId}
             onTranscript={handleSpeechTranscript}
             className="rounded-full"
             iconSize={16}
@@ -1418,7 +1370,7 @@ export const ChatInput = memo(function ChatInput({
         {showQuickRepliesMenu && quickReplyActions.length > 0 && (
           <QuickReplyMenu
             actions={quickReplyActions}
-            disabled={readOnly || !activeChatId || isReadingAttachments || (!hasInput && attachments.length === 0)}
+            disabled={!activeChatId || isReadingAttachments || (!hasInput && attachments.length === 0)}
           />
         )}
 
@@ -1428,7 +1380,6 @@ export const ChatInput = memo(function ChatInput({
           onClick={isStreaming ? () => useChatStore.getState().stopGeneration() : handleSend}
           disabled={
             (!isStreaming && isReadingAttachments) ||
-            readOnly ||
             (!hasInput && !attachments.length && !isStreaming && !canRetry && !canContinue) ||
             !activeChatId
           }

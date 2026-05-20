@@ -4,13 +4,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { previewGenerationPrompt } from "../../../engine/generation/prompt-preview";
 import { backfillConversationSummaries } from "../../../engine/modes/chat/core/summaries/auto-summary.service";
-import {
-  appendChatSummaryEntryToMetadata,
-  compileChatSummaryEntries,
-  ensureSummaryEntryMetadata,
-  normalizeChatSummaryEntries,
-  normalizeChatSummaryPromptTemplates,
-} from "../../../engine/shared/text/chat-summary-entries";
+import { appendChatSummaryEntryToMetadata } from "../../../engine/shared/text/chat-summary-entries";
 import { llmApi } from "../../../shared/api/llm-api";
 import { storageApi } from "../../../shared/api/storage-api";
 import { invokeTauri } from "../../../shared/api/tauri-client";
@@ -21,17 +15,7 @@ import { useEncounterStore } from "../../../shared/stores/encounter.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { ApiError } from "../../../shared/api/api-errors";
 import { lorebookKeys } from "../../lorebooks/hooks/use-lorebooks";
-import type {
-  Chat,
-  ChatMemoryChunk,
-  ChatSummaryEntry,
-  ChatSummaryPromptTemplate,
-  ConversationNote,
-  Message,
-  MessageSwipe,
-  DaySummaryEntry,
-  WeekSummaryEntry,
-} from "../../../engine/contracts/types/chat";
+import type { Chat, ChatMemoryChunk, ConversationNote, Message, MessageSwipe, DaySummaryEntry, WeekSummaryEntry } from "../../../engine/contracts/types/chat";
 
 export const chatKeys = {
   all: ["chats"] as const,
@@ -483,47 +467,6 @@ export function useUpdateChatMetadata() {
   });
 }
 
-export function useUpdateRollingChatSummary() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      id,
-      ...body
-    }: {
-      id: string;
-      summaryEntries?: ChatSummaryEntry[];
-      summaryPromptTemplates?: ChatSummaryPromptTemplate[];
-      activeSummaryPromptTemplateId?: string | null;
-      summary?: string | null;
-    }) => {
-      const patch: Record<string, unknown> = {};
-      if (body.summaryEntries) {
-        patch.summaryEntries = normalizeChatSummaryEntries(body.summaryEntries);
-        patch.summary = compileChatSummaryEntries(patch.summaryEntries as ChatSummaryEntry[]);
-      }
-      if (body.summaryPromptTemplates) {
-        patch.summaryPromptTemplates = normalizeChatSummaryPromptTemplates(body.summaryPromptTemplates);
-      }
-      if (body.activeSummaryPromptTemplateId !== undefined) {
-        patch.activeSummaryPromptTemplateId = body.activeSummaryPromptTemplateId;
-      }
-      if (body.summary !== undefined) {
-        patch.summary = body.summary;
-      }
-      return storageApi.patchChatMetadata<Chat>(id, patch);
-    },
-    onSuccess: (data, vars) => {
-      if (data) {
-        qc.setQueryData(chatKeys.detail(vars.id), data);
-      } else {
-        qc.invalidateQueries({ queryKey: chatKeys.detail(vars.id) });
-      }
-      qc.invalidateQueries({ queryKey: chatKeys.list() });
-      qc.invalidateQueries({ queryKey: lorebookKeys.active(vars.id) });
-    },
-  });
-}
-
 export function useMarkAutonomousUnread() {
   const qc = useQueryClient();
   return useMutation({
@@ -792,10 +735,6 @@ function messageHiddenFromAi(message: Message) {
   return extra.hiddenFromAI === true || extra.hiddenFromAi === true;
 }
 
-function isStoredBooleanTrue(value: unknown): boolean {
-  return value === true || value === "true" || value === "1";
-}
-
 function compactTranscript(messages: Message[]) {
   return messages
     .map((message, index) => {
@@ -809,64 +748,33 @@ async function resolveSummaryConnectionId(chat: Chat): Promise<string> {
   if (typeof chat.connectionId === "string" && chat.connectionId.trim()) return chat.connectionId.trim();
   const connections = await storageApi.list<Record<string, unknown>>("connections");
   const selected =
-    connections.find((connection) => isStoredBooleanTrue(connection.isDefault) || isStoredBooleanTrue(connection.default)) ??
-    connections[0];
+    connections.find((connection) => connection.isDefault === true || connection.default === true) ?? connections[0];
   const connectionId = typeof selected?.id === "string" ? selected.id.trim() : "";
   if (!connectionId) throw new Error("No API connection configured for summary generation.");
   return connectionId;
 }
 
-type SummarySourceMode = "last" | "range";
-
-interface GenerateChatSummaryOptions {
-  contextSize?: number;
-  sourceMode?: SummarySourceMode;
-  rangeStartIndex?: number;
-  rangeEndIndex?: number;
-  promptTemplateId?: string | null;
-}
-
-async function generateLlmChatSummary(
-  chatId: string,
-  options: GenerateChatSummaryOptions = {},
-): Promise<{ summary: string; messageIds: string[] }> {
+async function generateLlmChatSummary(chatId: string, contextSize?: number): Promise<{ summary: string }> {
   const [chat, allMessages] = await Promise.all([
     storageApi.get<Chat>("chats", chatId),
     storageApi.listChatMessages<Message>(chatId),
   ]);
   if (!chat) throw new Error("Chat was not found.");
   const storedContextSize = Number((chat.metadata as { summaryContextSize?: unknown } | null)?.summaryContextSize);
-  const limit = Math.max(
-    5,
-    Math.min(200, Math.trunc(options.contextSize ?? (Number.isFinite(storedContextSize) ? storedContextSize : 50))),
-  );
-  const visibleMessages = allMessages.filter((message) => !messageHiddenFromAi(message) && !!message.content?.trim());
-  let selected = visibleMessages.slice(-limit);
-  if (options.sourceMode === "range") {
-    const startIndex = Math.max(1, Math.trunc(options.rangeStartIndex ?? 1));
-    const endIndex = Math.max(startIndex, Math.trunc(options.rangeEndIndex ?? startIndex));
-    if (endIndex - startIndex + 1 > 200) throw new Error("Summary ranges are limited to 200 messages.");
-    const start = startIndex - 1;
-    selected = visibleMessages.slice(start, endIndex);
-    if (selected.length === 0) throw new Error("No non-hidden messages available in the selected range.");
-  }
+  const limit = Math.max(5, Math.min(200, Math.trunc(contextSize ?? (Number.isFinite(storedContextSize) ? storedContextSize : 50))));
+  const selected = allMessages
+    .filter((message) => !messageHiddenFromAi(message) && !!message.content?.trim())
+    .slice(-limit);
   if (selected.length === 0) throw new Error("No non-hidden messages available for summary generation.");
 
   const connectionId = await resolveSummaryConnectionId(chat);
   const transcript = compactTranscript(selected);
-  const metadata = parseRecord(chat.metadata);
-  const templates = normalizeChatSummaryPromptTemplates(metadata.summaryPromptTemplates);
-  const requestedTemplateId = typeof options.promptTemplateId === "string" ? options.promptTemplateId.trim() : "";
-  const activeTemplateId =
-    requestedTemplateId || (typeof metadata.activeSummaryPromptTemplateId === "string" ? metadata.activeSummaryPromptTemplateId.trim() : "");
-  const selectedTemplate = templates.find((template) => template.id === activeTemplateId) ?? null;
   const rawSummary = await llmApi.complete({
     connectionId,
     messages: [
       {
         role: "system",
         content:
-          selectedTemplate?.prompt.trim() ||
           "Summarize the provided chat transcript for future roleplay/conversation context. Preserve durable facts, relationships, goals, decisions, unresolved threads, and emotional state. Do not add new events.",
       },
       {
@@ -879,36 +787,17 @@ async function generateLlmChatSummary(
   const content = rawSummary.trim();
   if (!content) throw new Error("Summary generation returned an empty response.");
 
-  const ensured = ensureSummaryEntryMetadata(metadata);
+  const metadata = parseRecord(chat.metadata);
   const now = new Date().toISOString();
   const appended = appendChatSummaryEntryToMetadata(
-    {
-      ...metadata,
-      summaryEntries: ensured.entries,
-      summary: ensured.summary,
-    },
+    metadata,
     {
       content,
       origin: "manual",
-      sourceMode: options.sourceMode ?? "last",
-      title:
-        options.sourceMode === "range"
-          ? `Summary messages ${Math.max(1, Math.trunc(options.rangeStartIndex ?? 1))}-${Math.max(
-              Math.max(1, Math.trunc(options.rangeStartIndex ?? 1)),
-              Math.trunc(options.rangeEndIndex ?? Math.max(1, Math.trunc(options.rangeStartIndex ?? 1))),
-            )}`
-          : "Summary of recent messages",
+      sourceMode: "last",
+      title: "Summary of recent messages",
       messageCount: selected.length,
-      rangeStartIndex: options.sourceMode === "range" ? Math.max(1, Math.trunc(options.rangeStartIndex ?? 1)) : undefined,
-      rangeEndIndex:
-        options.sourceMode === "range"
-          ? Math.max(
-              Math.max(1, Math.trunc(options.rangeStartIndex ?? 1)),
-              Math.trunc(options.rangeEndIndex ?? Math.max(1, Math.trunc(options.rangeStartIndex ?? 1))),
-            )
-          : undefined,
       messageIds: selected.map((message) => message.id),
-      promptTemplateId: activeTemplateId || null,
     },
     {
       now,
@@ -922,7 +811,7 @@ async function generateLlmChatSummary(
     summaryEntries: appended.entries,
     summaryContextSize: limit,
   });
-  return { summary: appended.summary ?? content, messageIds: selected.map((message) => message.id) };
+  return { summary: appended.summary ?? content };
 }
 
 /** Peek at the assembled prompt for a chat */
@@ -1037,8 +926,8 @@ export function useBranchChat() {
 export function useGenerateSummary() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ chatId, ...options }: { chatId: string } & GenerateChatSummaryOptions) =>
-      generateLlmChatSummary(chatId, options),
+    mutationFn: ({ chatId, contextSize }: { chatId: string; contextSize?: number }) =>
+      generateLlmChatSummary(chatId, contextSize),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: chatKeys.detail(vars.chatId) });
     },

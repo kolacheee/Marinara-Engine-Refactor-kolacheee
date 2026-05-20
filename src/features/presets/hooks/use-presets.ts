@@ -36,10 +36,6 @@ const promptOrderField: Record<PromptNestedKind, string> = {
   variables: "variableOrder",
 };
 
-function isStoredBooleanTrue(value: unknown): boolean {
-  return value === true || value === "true" || value === "1";
-}
-
 async function listPromptNested<T>(presetId: string, kind: PromptNestedKind): Promise<T[]> {
   return storageApi.list<T>(promptNestedEntity[kind], { filters: { presetId } });
 }
@@ -126,13 +122,7 @@ export function useDefaultPreset() {
     queryKey: presetKeys.default(),
     queryFn: async () => {
       const presets = await storageApi.list<PromptPreset>("prompts");
-      return (
-        presets.find(
-          (preset) =>
-            isStoredBooleanTrue((preset as PromptPreset & { default?: unknown }).isDefault) ||
-            isStoredBooleanTrue((preset as PromptPreset & { default?: unknown }).default),
-        ) ?? null
-      );
+      return presets.find((preset) => (preset as PromptPreset & { default?: boolean }).isDefault || (preset as PromptPreset & { default?: boolean }).default) ?? null;
     },
     staleTime: 5 * 60_000,
   });
