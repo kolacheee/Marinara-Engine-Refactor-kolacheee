@@ -10,7 +10,12 @@ export async function importProfile<T>(envelope: unknown): Promise<T> {
   return invokeTauri<T>("profile_import", { envelope });
 }
 
+export async function importProfileFile<T>(path: string): Promise<T> {
+  return invokeTauri<T>("profile_import_file", { path });
+}
+
 export const profileApi = {
   exportProfile,
   importProfile,
+  importProfileFile,
 };

@@ -35,6 +35,11 @@ pub fn profile_import(state: State<'_, AppState>, envelope: Value) -> Result<Val
 }
 
 #[tauri::command]
+pub fn profile_import_file(state: State<'_, AppState>, path: String) -> Result<Value, AppError> {
+    profile::import_profile_file_path(&state, &path)
+}
+
+#[tauri::command]
 pub fn prompt_export(state: State<'_, AppState>, preset_id: String) -> Result<Value, AppError> {
     exports::export_prompt(&state, &preset_id)
 }
