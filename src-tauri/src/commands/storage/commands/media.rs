@@ -216,10 +216,19 @@ pub async fn llm_complete(state: State<'_, AppState>, request: Value) -> Result<
 #[tauri::command]
 pub async fn llm_stream_channel(
     state: State<'_, AppState>,
+    stream_id: String,
     request: Value,
     on_event: tauri::ipc::Channel<Value>,
 ) -> Result<(), AppError> {
-    llm::llm_stream_channel(&state, request, on_event).await
+    llm::llm_stream_channel(&state, stream_id, request, on_event).await
+}
+
+#[tauri::command]
+pub fn llm_stream_cancel(
+    state: State<'_, AppState>,
+    stream_id: String,
+) -> Result<Value, AppError> {
+    llm::llm_stream_cancel(&state, &stream_id)
 }
 
 #[tauri::command]

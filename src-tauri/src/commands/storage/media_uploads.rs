@@ -50,6 +50,77 @@ pub(crate) fn persist_image_upload(
     })
 }
 
+pub(crate) fn remove_managed_record_file(
+    state: &AppState,
+    folder: &str,
+    record: &Value,
+    path_key: &str,
+    filename_key: &str,
+) {
+    let Ok(Some(path)) = managed_record_file_path(state, folder, record, path_key, filename_key)
+    else {
+        return;
+    };
+    if path.exists() && path.is_file() {
+        if let Err(error) = fs::remove_file(&path) {
+            let record_id = record
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("<unknown>");
+            eprintln!(
+                "warn: failed to remove managed file for {folder}/{record_id} at {}: {error}",
+                path.display()
+            );
+        }
+    }
+}
+
+fn managed_record_file_path(
+    state: &AppState,
+    folder: &str,
+    record: &Value,
+    path_key: &str,
+    filename_key: &str,
+) -> AppResult<Option<PathBuf>> {
+    let managed_dir = state.data_dir.join(folder);
+    let candidate = record
+        .get(filename_key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(|filename| managed_dir.join(safe_filename(filename)))
+        .or_else(|| {
+            record
+                .get(path_key)
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .map(PathBuf::from)
+        });
+    let Some(candidate) = candidate else {
+        return Ok(None);
+    };
+    if !candidate.exists() {
+        return Ok(None);
+    }
+    if !is_path_inside_dir(&candidate, &managed_dir)? {
+        return Ok(None);
+    }
+    Ok(Some(candidate))
+}
+
+fn is_path_inside_dir(path: &Path, dir: &Path) -> AppResult<bool> {
+    let dir = match fs::canonicalize(dir) {
+        Ok(dir) => dir,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(AppError::from(error)),
+    };
+    let path = match fs::canonicalize(path) {
+        Ok(path) => path,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(AppError::from(error)),
+    };
+    Ok(path.starts_with(dir))
+}
+
 pub(crate) fn decode_image_payload(value: &str, field_name: &str) -> AppResult<(String, Vec<u8>)> {
     if let Some((header, payload)) = value.split_once(',') {
         if header.starts_with("data:") {

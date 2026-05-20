@@ -86,6 +86,7 @@ import { dispatchSpotifySceneTrackChange } from "../../../shared/lib/spotify-pla
 import { ActiveWorldInfoButton, ActiveWorldInfoModal } from "../../visuals/components/ActiveWorldInfoButton";
 import type { CombatInitState, CombatPartyMember, CombatEnemy, CombatDialogueCue, CombatItemEffect, CombatMechanic, EncounterSettings } from "../../../engine/contracts/types/combat-encounter";
 import type { PartyDialogueLine, CombatSummary, GameMap, GameActiveState, DiceRollResult, HudWidget, SkillCheckResult } from "../../../engine/contracts/types/game";
+import type { GameState } from "../../../engine/contracts/types/game-state";
 import type { SceneAnalysis, SceneIllustrationRequest, SceneSegmentEffect, SceneSpotifyTrackCandidate, SceneSpotifyTrackSelection } from "../../../engine/contracts/types/scene";
 import { scoreMusic, scoreAmbient } from "../../../engine/shared/scoring/music-score";
 import { GameNarration } from "./GameNarration";
@@ -106,6 +107,7 @@ import { GameTransitionManager } from "./GameTransitionManager";
 import { GameChoiceCards } from "./GameChoiceCards";
 import { GameQteOverlay } from "./GameQteOverlay";
 import { GameJournal } from "./GameJournal";
+import { GameCheckpoints } from "./GameCheckpoints";
 import { GameJsonRepairModal } from "./GameJsonRepairModal";
 import {
   ImagePromptReviewModal as GameImagePromptReviewModal,
@@ -1429,6 +1431,7 @@ import {
   HelpCircle,
   History,
   Image,
+  ListRestart,
   Loader2,
   MoreHorizontal,
   Play,
@@ -1812,6 +1815,7 @@ export function GameSurface({
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [journalOpen, setJournalOpen] = useState(false);
+  const [checkpointsOpen, setCheckpointsOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [combatLogsOpen, setCombatLogsOpen] = useState(false);
   const [spotifyRetryPending, setSpotifyRetryPending] = useState(false);
@@ -1887,6 +1891,28 @@ export function GameSurface({
     return (chatMeta.gameInventory as Array<{ name: string; quantity: number }>) ?? [];
   });
   const inventoryItemsRef = useRef(inventoryItems);
+  const handleCheckpointLoaded = useCallback(
+    (result: { gameState?: unknown; metadata?: Record<string, unknown> }) => {
+      setCheckpointsOpen(false);
+      if (result.gameState && typeof result.gameState === "object" && !Array.isArray(result.gameState)) {
+        useGameStateStore.getState().setGameState(result.gameState as GameState);
+      }
+      if (result.metadata) {
+        const nextInventory = Array.isArray(result.metadata.gameInventory)
+          ? (result.metadata.gameInventory as Array<{ name: string; quantity: number }>)
+          : [];
+        setInventoryItems(nextInventory);
+        inventoryItemsRef.current = nextInventory;
+        recentMusicHistoryRef.current = normalizeRecentMusicHistory(result.metadata.gameRecentMusic);
+        recentSpotifyTrackHistoryRef.current = normalizeRecentSpotifyTrackHistory(result.metadata.gameRecentSpotifyTracks);
+      }
+      queryClient.invalidateQueries({ queryKey: chatKeys.detail(activeChatId) });
+      queryClient.invalidateQueries({ queryKey: chatKeys.messages(activeChatId) });
+      queryClient.invalidateQueries({ queryKey: chatKeys.messageCount(activeChatId) });
+      queryClient.invalidateQueries({ queryKey: [...gameKeys.all, "checkpoints", activeChatId] });
+    },
+    [activeChatId, queryClient],
+  );
   const [inventoryNotifications, setInventoryNotifications] = useState<string[]>([]);
   const [removingPartyMemberId, setRemovingPartyMemberId] = useState<string | null>(null);
   const [pendingMapMove, setPendingMapMove] = useState<{
@@ -7508,6 +7534,13 @@ export function GameSurface({
                   >
                     <History size={14} />
                   </button>
+                  <button
+                    onClick={() => setCheckpointsOpen(true)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/80 backdrop-blur-md transition-colors hover:bg-black/60 hover:text-white"
+                    title="Checkpoints"
+                  >
+                    <ListRestart size={14} />
+                  </button>
                   <ActiveWorldInfoButton
                     chatId={activeChatId}
                     iconSize={14}
@@ -7689,6 +7722,16 @@ export function GameSurface({
                           title="History"
                         >
                           <History size={14} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setCheckpointsOpen(true);
+                            setMobileActionsOpen(false);
+                          }}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                          title="Checkpoints"
+                        >
+                          <ListRestart size={14} />
                         </button>
                         <button
                           onClick={() => {
@@ -8323,6 +8366,18 @@ export function GameSurface({
                     onUpdatePlotArcs={handleUpdateCampaignProgression}
                     onClose={() => setHistoryOpen(false)}
                   />
+                )}
+
+                {checkpointsOpen && (
+                  <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+                    <div className="h-[82vh] w-full max-w-3xl overflow-hidden rounded-xl border border-white/15 bg-[var(--card)] shadow-2xl">
+                      <GameCheckpoints
+                        chatId={activeChatId}
+                        onClose={() => setCheckpointsOpen(false)}
+                        onLoaded={handleCheckpointLoaded}
+                      />
+                    </div>
+                  </div>
                 )}
 
                 {combatLogsOpen && (

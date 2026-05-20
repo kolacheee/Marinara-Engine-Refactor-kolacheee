@@ -1,6 +1,17 @@
+#[path = "profile/assets.rs"]
+mod assets;
+#[path = "profile/legacy.rs"]
+mod legacy;
+#[path = "profile/zip_import.rs"]
+mod zip_import;
+
+use self::assets::{profile_assets, restore_profile_assets};
+use self::legacy::import_legacy_profile_tables;
+use self::zip_import::import_profile_zip;
 use super::shared::*;
 use super::*;
-use std::path::{Component, Path, PathBuf};
+use std::fs::File;
+use std::path::PathBuf;
 
 const PROFILE_COLLECTIONS: &[&str] = &[
     "characters",
@@ -38,16 +49,6 @@ const PROFILE_COLLECTIONS: &[&str] = &[
     "game-checkpoints",
 ];
 
-const PROFILE_ASSET_DIRS: &[&str] = &[
-    "avatars",
-    "sprites",
-    "backgrounds",
-    "game-assets",
-    "fonts",
-    "knowledge-sources",
-    "lorebooks/images",
-];
-
 pub(crate) fn profile_snapshot(state: &AppState) -> AppResult<Value> {
     Ok(json!({
         "type": "marinara_profile",
@@ -59,6 +60,28 @@ pub(crate) fn profile_snapshot(state: &AppState) -> AppResult<Value> {
             "assets": profile_assets(state)?,
         }
     }))
+}
+
+pub(crate) fn import_profile_file_path(state: &AppState, value: &str) -> AppResult<Value> {
+    let path = PathBuf::from(value.trim());
+    if path.as_os_str().is_empty() {
+        return Err(AppError::invalid_input("Profile file path is required"));
+    }
+    if !path.is_file() {
+        return Err(AppError::invalid_input("Profile import path is not a file"));
+    }
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("json") => import_profile(state, serde_json::from_reader(File::open(path)?)?),
+        Some("zip") => import_profile_zip(state, &path),
+        _ => Err(AppError::invalid_input(
+            "Profile import must be a .json or .zip file",
+        )),
+    }
 }
 
 pub(crate) fn profile_call(
@@ -93,19 +116,34 @@ fn import_profile(state: &AppState, body: Value) -> AppResult<Value> {
         .and_then(Value::as_object)
         .filter(|_| body.get("type").and_then(Value::as_str) == Some("marinara_profile"))
         .ok_or_else(|| AppError::invalid_input("Invalid Marinara profile export"))?;
-    let collections = data
-        .get("collections")
+    if let Some(collections) = data.get("collections").and_then(Value::as_object) {
+        return import_profile_collections(state, data, collections);
+    }
+    let tables = data
+        .get("fileStorage")
+        .and_then(|value| value.get("tables"))
         .and_then(Value::as_object)
         .ok_or_else(|| {
-            AppError::invalid_input("Native profile export must contain data.collections")
+            AppError::invalid_input(
+                "Profile export must contain data.collections or data.fileStorage.tables",
+            )
         })?;
-    import_profile_collections(state, data, collections)
+    import_legacy_profile_tables(state, data, tables)
 }
 
 fn import_profile_collections(
     state: &AppState,
     data: &Map<String, Value>,
     collections: &Map<String, Value>,
+) -> AppResult<Value> {
+    let restored_assets = restore_profile_assets(state, data.get("assets"))?;
+    import_profile_collections_with_restored_assets(state, collections, restored_assets)
+}
+
+pub(super) fn import_profile_collections_with_restored_assets(
+    state: &AppState,
+    collections: &Map<String, Value>,
+    restored_assets: usize,
 ) -> AppResult<Value> {
     let mut imported = Map::new();
     for collection in PROFILE_COLLECTIONS {
@@ -117,9 +155,15 @@ fn import_profile_collections(
         state.storage.replace_all(collection, rows.clone())?;
         imported.insert((*collection).to_string(), json!(rows.len()));
     }
-    let restored_assets = restore_profile_assets(state, data.get("assets"))?;
     imported.insert("files".to_string(), json!(restored_assets));
+    insert_profile_import_aliases(&mut imported);
     Ok(json!({ "success": true, "imported": imported }))
+}
+
+fn insert_profile_import_aliases(imported: &mut Map<String, Value>) {
+    if let Some(value) = imported.get("prompts").cloned() {
+        imported.insert("presets".to_string(), value);
+    }
 }
 
 fn profile_collections(state: &AppState) -> AppResult<Map<String, Value>> {
@@ -131,108 +175,4 @@ fn profile_collections(state: &AppState) -> AppResult<Map<String, Value>> {
         );
     }
     Ok(collections)
-}
-
-fn profile_assets(state: &AppState) -> AppResult<Vec<Value>> {
-    let mut assets = Vec::new();
-    for dir in PROFILE_ASSET_DIRS {
-        let relative = Path::new(dir);
-        collect_profile_assets(&state.data_dir, relative, &mut assets)?;
-    }
-    Ok(assets)
-}
-
-fn collect_profile_assets(root: &Path, relative: &Path, assets: &mut Vec<Value>) -> AppResult<()> {
-    let dir = root.join(relative);
-    if !dir.exists() {
-        return Ok(());
-    }
-    for entry in fs::read_dir(&dir)? {
-        let path = entry?.path();
-        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
-            continue;
-        };
-        if name.starts_with('.') {
-            continue;
-        }
-        let next_relative = relative.join(name);
-        if path.is_dir() {
-            collect_profile_assets(root, &next_relative, assets)?;
-        } else if path.is_file() {
-            assets.push(json!({
-                "path": profile_relative_path(&next_relative),
-                "base64": general_purpose::STANDARD.encode(fs::read(path)?),
-            }));
-        }
-    }
-    Ok(())
-}
-
-fn restore_profile_assets(state: &AppState, raw_assets: Option<&Value>) -> AppResult<usize> {
-    let Some(assets) = raw_assets.and_then(Value::as_array) else {
-        return Ok(0);
-    };
-    let mut restored = 0usize;
-    for asset in assets {
-        let Some(path) = asset.get("path").and_then(Value::as_str) else {
-            continue;
-        };
-        let Some(base64) = asset.get("base64").and_then(Value::as_str) else {
-            continue;
-        };
-        let relative = safe_profile_asset_path(path)?;
-        let bytes = general_purpose::STANDARD
-            .decode(base64.trim())
-            .map_err(|error| {
-                AppError::invalid_input(format!("Invalid profile asset data: {error}"))
-            })?;
-        let target = state.data_dir.join(relative);
-        if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(target, bytes)?;
-        restored += 1;
-    }
-    Ok(restored)
-}
-
-fn safe_profile_asset_path(value: &str) -> AppResult<PathBuf> {
-    let normalized = value.replace('\\', "/");
-    let path = Path::new(&normalized);
-    if path.is_absolute() {
-        return Err(AppError::invalid_input("Invalid profile asset path"));
-    }
-    let mut output = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::Normal(segment) => {
-                let segment = segment
-                    .to_str()
-                    .ok_or_else(|| AppError::invalid_input("Invalid profile asset path"))?;
-                if segment.is_empty() || segment.starts_with('.') {
-                    return Err(AppError::invalid_input("Invalid profile asset path"));
-                }
-                output.push(segment);
-            }
-            _ => return Err(AppError::invalid_input("Invalid profile asset path")),
-        }
-    }
-    if output.as_os_str().is_empty()
-        || !PROFILE_ASSET_DIRS
-            .iter()
-            .any(|allowed| output.starts_with(Path::new(allowed)))
-    {
-        return Err(AppError::invalid_input("Invalid profile asset path"));
-    }
-    Ok(output)
-}
-
-fn profile_relative_path(path: &Path) -> String {
-    path.components()
-        .filter_map(|component| match component {
-            Component::Normal(value) => value.to_str().map(ToOwned::to_owned),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("/")
 }

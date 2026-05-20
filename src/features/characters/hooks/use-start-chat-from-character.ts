@@ -69,9 +69,9 @@ export function useStartChatFromCharacter() {
               }
             }
 
-            useChatStore.getState().setShouldOpenSettings(true);
-            useChatStore.getState().setShouldOpenWizard(true);
-            useChatStore.getState().setShouldOpenWizardInShortcutMode(true);
+            useChatStore.getState().setShouldOpenSettings(true, chat.id);
+            useChatStore.getState().setShouldOpenWizard(true, chat.id);
+            useChatStore.getState().setShouldOpenWizardInShortcutMode(true, chat.id);
           },
         },
       );

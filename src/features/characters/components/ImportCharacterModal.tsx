@@ -176,13 +176,15 @@ export function ImportCharacterModal({ open, onClose }: Props) {
 
       for (const file of marinaraPackages) {
         try {
-          const form = new FormData();
-          form.append("file", file, file.name);
-          form.append(
-            "timestampOverrides",
-            JSON.stringify({ createdAt: file.lastModified, updatedAt: file.lastModified }),
-          );
-          const result = await importApi.marinaraFile<{ success: boolean; name?: string; error?: string }>(file);
+          const result = await importApi.marinaraFile<{ success: boolean; name?: string; error?: string }>({
+            file,
+            fields: {
+              timestampOverrides: JSON.stringify({
+                createdAt: file.lastModified,
+                updatedAt: file.lastModified,
+              }),
+            },
+          });
           nextResults.push({
             filename: file.name,
             success: result.success,

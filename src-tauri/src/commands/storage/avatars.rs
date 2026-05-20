@@ -1,4 +1,4 @@
-use super::media_uploads::{persist_image_upload, safe_filename};
+use super::media_uploads::{persist_image_upload, remove_managed_record_file, safe_filename};
 use super::*;
 
 pub(crate) fn update_character_avatar(
@@ -7,6 +7,7 @@ pub(crate) fn update_character_avatar(
     id: &str,
     body: Value,
 ) -> AppResult<Value> {
+    let previous = shared::get_required(state, collection, id)?;
     let stored = persist_image_upload(
         state,
         &format!("avatars/{}", safe_filename(collection)),
@@ -14,7 +15,7 @@ pub(crate) fn update_character_avatar(
         &body,
         "avatar",
     )?;
-    state.storage.patch(
+    let updated = state.storage.patch(
         collection,
         id,
         json!({
@@ -24,6 +25,22 @@ pub(crate) fn update_character_avatar(
             "avatarFilename": stored.filename,
             "avatarUpdatedAt": now_iso()
         }),
+    )?;
+    remove_avatar_file(state, collection, &previous);
+    Ok(updated)
+}
+
+pub(crate) fn remove_avatar_file(
+    state: &AppState,
+    collection: &str,
+    record: &Value,
+) {
+    remove_managed_record_file(
+        state,
+        &format!("avatars/{}", safe_filename(collection)),
+        record,
+        "avatarFilePath",
+        "avatarFilename",
     )
 }
 

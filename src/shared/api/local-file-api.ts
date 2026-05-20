@@ -55,7 +55,7 @@ export function isManagedLocalAssetUrl(url: string | null | undefined): boolean 
 
 export function filePathToAssetUrl(path: string | null | undefined): string {
   if (!path) return "";
-  if (path.startsWith("asset:") || path.startsWith("http://asset.localhost")) return "";
+  if (path.startsWith("asset:") || path.startsWith("http://asset.localhost")) return path;
   if (hasScheme(path) && !isAbsoluteFilesystemPath(path)) return path;
   if (!canConvertFileSrc()) return path;
   try {

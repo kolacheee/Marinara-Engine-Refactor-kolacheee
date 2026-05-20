@@ -54,8 +54,8 @@ export function useStartNewChat() {
                 /* non-fatal: chat still opens with system defaults */
               }
             }
-            useChatStore.getState().setShouldOpenSettings(true);
-            useChatStore.getState().setShouldOpenWizard(true);
+            useChatStore.getState().setShouldOpenSettings(true, chat.id);
+            useChatStore.getState().setShouldOpenWizard(true, chat.id);
           },
         },
       );

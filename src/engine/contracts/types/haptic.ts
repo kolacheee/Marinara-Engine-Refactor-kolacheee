@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 
 /** Capability of a connected haptic device. */
-export type HapticCapability = "vibrate" | "rotate" | "oscillate" | "constrict" | "inflate" | "position";
+export type HapticCapability = "vibrate" | "rotate" | "oscillate" | "constrict" | "position";
 
 /** A connected haptic device (client-facing representation). */
 export interface HapticDevice {
@@ -30,7 +30,7 @@ export interface HapticDeviceCommand {
   /** Device index (0 = first device, "all" = broadcast to all) */
   deviceIndex: number | "all";
   /** Action type */
-  action: "vibrate" | "rotate" | "oscillate" | "constrict" | "inflate" | "position" | "stop";
+  action: "vibrate" | "rotate" | "oscillate" | "constrict" | "position" | "stop";
   /** Intensity / speed (0.0-1.0) — not used for "stop" */
   intensity?: number;
   /** Duration in seconds — 0 or omitted means indefinite until next command */

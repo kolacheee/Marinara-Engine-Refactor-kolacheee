@@ -1,4 +1,4 @@
-use super::shared;
+use super::{avatars, lorebook_images, shared};
 use crate::builtins::is_protected_record;
 use crate::state::AppState;
 use marinara_core::AppError;
@@ -101,7 +101,11 @@ pub fn storage_update(
     id: String,
     patch: Value,
 ) -> Result<Value, AppError> {
-    state.storage.patch(&entity, &id, patch)
+    state.storage.patch(
+        &entity,
+        &id,
+        shared::normalize_update_patch(&entity, patch)?,
+    )
 }
 
 #[tauri::command]
@@ -115,8 +119,29 @@ pub fn storage_delete(
             "Built-in Professor Mari cannot be deleted",
         ));
     }
+    let existing = media_owned_record(&state, &entity, &id)?;
     let deleted = state.storage.delete(&entity, &id)?;
+    if deleted {
+        if let Some(record) = existing.as_ref() {
+            remove_owned_media(&state, &entity, record);
+        }
+    }
     Ok(json!({ "deleted": deleted }))
+}
+
+fn media_owned_record(state: &AppState, entity: &str, id: &str) -> Result<Option<Value>, AppError> {
+    match entity {
+        "characters" | "personas" | "lorebooks" => state.storage.get(entity, id),
+        _ => Ok(None),
+    }
+}
+
+fn remove_owned_media(state: &AppState, entity: &str, record: &Value) {
+    match entity {
+        "characters" | "personas" => avatars::remove_avatar_file(state, entity, record),
+        "lorebooks" => lorebook_images::remove_lorebook_image_file(state, record),
+        _ => {}
+    }
 }
 
 #[tauri::command]

@@ -49,13 +49,15 @@ export function ImportPersonaModal({ open, onClose }: Props) {
         // avatar binary). Detect via the zip signature so a renamed file
         // still works.
         if (await isZipFile(file)) {
-          const form = new FormData();
-          form.append("file", file, file.name);
-          form.append(
-            "timestampOverrides",
-            JSON.stringify({ createdAt: file.lastModified, updatedAt: file.lastModified }),
-          );
-          const data = await importApi.marinaraFile<{ success: boolean; name?: string; error?: string }>(file);
+          const data = await importApi.marinaraFile<{ success: boolean; name?: string; error?: string }>({
+            file,
+            fields: {
+              timestampOverrides: JSON.stringify({
+                createdAt: file.lastModified,
+                updatedAt: file.lastModified,
+              }),
+            },
+          });
           nextResults.push({
             filename: file.name,
             success: data.success,

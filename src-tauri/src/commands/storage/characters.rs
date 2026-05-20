@@ -60,13 +60,3 @@ pub(crate) fn restore_character_version(
         .storage
         .patch("characters", character_id, Value::Object(patch))
 }
-
-fn normalize_character_data_for_storage(data: &Value) -> AppResult<Value> {
-    match data {
-        Value::String(raw) => Ok(Value::String(raw.clone())),
-        Value::Object(_) => Ok(Value::String(serde_json::to_string(data)?)),
-        _ => Err(AppError::invalid_input(
-            "Character version data must be an object or JSON string",
-        )),
-    }
-}

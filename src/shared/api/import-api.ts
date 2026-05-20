@@ -27,7 +27,8 @@ async function filesPayload(payload: File[] | FormData): Promise<Record<string, 
 
 export const importApi = {
   marinara: <T>(envelope: unknown) => invokeTauri<T>("import_marinara", { envelope }),
-  marinaraFile: async <T>(file: File) => invokeTauri<T>("import_marinara_file", { body: await filePayload(file) }),
+  marinaraFile: async <T>(payload: ImportFilePayload | File) =>
+    invokeTauri<T>("import_marinara_file", { body: await filePayload(payload) }),
   stCharacterJson: <T>(body: unknown) => invokeTauri<T>("import_st_character", { body }),
   stCharacterFile: async <T>(payload: ImportFilePayload) =>
     invokeTauri<T>("import_st_character", { body: await filePayload(payload) }),

@@ -1,6 +1,6 @@
 use base64::{engine::general_purpose, Engine as _};
 use marinara_core::{now_iso, AppError, AppResult};
-use marinara_security::assert_relative_safe_path;
+use marinara_security::{assert_inside_dir, assert_relative_safe_path};
 use serde_json::{json, Map, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,7 +22,9 @@ impl AssetService {
     pub fn new(root: impl Into<PathBuf>) -> AppResult<Self> {
         let root = root.into();
         fs::create_dir_all(&root)?;
-        Ok(Self { root })
+        Ok(Self {
+            root: root.canonicalize()?,
+        })
     }
 
     pub fn root(&self) -> &Path {
@@ -37,7 +39,7 @@ impl AssetService {
     }
 
     pub fn absolute_path(&self, path: &str) -> AppResult<PathBuf> {
-        Ok(self.root.join(assert_relative_safe_path(path)?))
+        assert_inside_dir(&self.root, &assert_relative_safe_path(path)?)
     }
 
     pub fn absolute_path_string(&self, path: &str) -> AppResult<String> {
@@ -217,7 +219,7 @@ impl AssetService {
         if let Some(subcategory) = subcategory.filter(|value| !value.trim().is_empty()) {
             rel.push(assert_relative_safe_path(subcategory)?);
         }
-        let dir = self.root.join(rel);
+        let dir = assert_inside_dir(&self.root, &rel)?;
         fs::create_dir_all(&dir)?;
         let target = unique_target_path(&dir.join(name))?;
         fs::write(&target, bytes)?;
@@ -492,6 +494,13 @@ fn sanitize_filename(name: &str) -> AppResult<String> {
 }
 
 fn should_skip_asset_entry(path: &Path) -> bool {
+    if fs::symlink_metadata(path)
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(true)
+    {
+        return true;
+    }
+
     path.file_name()
         .and_then(|name| name.to_str())
         .map(|name| name.starts_with('.') || name == "manifest.json")
@@ -519,6 +528,13 @@ fn image_dimensions_for(path: &Path) -> (Option<u32>, Option<u32>) {
 }
 
 fn copy_missing(source: &Path, target: &Path) -> AppResult<()> {
+    if fs::symlink_metadata(source)
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(true)
+    {
+        return Ok(());
+    }
+
     if source.is_dir() {
         fs::create_dir_all(target)?;
         for entry in fs::read_dir(source)? {
@@ -578,4 +594,86 @@ fn sort_asset_rows(rows: &mut [Value]) {
             a_name.cmp(b_name)
         })
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AssetService;
+    use std::fs;
+    #[cfg(windows)]
+    use std::io;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[cfg(unix)]
+    fn symlink_dir(source: &std::path::Path, target: &std::path::Path) -> bool {
+        std::os::unix::fs::symlink(source, target).expect("create test directory symlink");
+        true
+    }
+
+    #[cfg(windows)]
+    fn symlink_dir(source: &std::path::Path, target: &std::path::Path) -> bool {
+        match std::os::windows::fs::symlink_dir(source, target) {
+            Ok(()) => true,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::PermissionDenied | io::ErrorKind::Unsupported
+                ) =>
+            {
+                false
+            }
+            Err(error) => panic!("create test directory symlink: {error}"),
+        }
+    }
+
+    fn temp_root(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock after epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "marinara-assets-{name}-{}-{nonce}",
+            std::process::id()
+        ))
+    }
+
+    #[test]
+    fn writes_text_assets_inside_root() {
+        let root = temp_root("write-inside-root");
+        let service = AssetService::new(&root).expect("create asset service");
+
+        service
+            .write_text("notes/session.md", "session notes")
+            .expect("write text asset");
+
+        assert_eq!(
+            fs::read_to_string(root.join("notes/session.md")).expect("read written asset"),
+            "session notes"
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_paths_that_escape_root_through_symlinked_directory() {
+        let sandbox = temp_root("symlink-escape");
+        let root = sandbox.join("game-assets");
+        let outside = sandbox.join("outside");
+        fs::create_dir_all(root.join("music")).expect("create asset category");
+        fs::create_dir_all(&outside).expect("create outside directory");
+        fs::write(outside.join("secret.txt"), "outside").expect("write outside file");
+        if !symlink_dir(&outside, &root.join("music/escape")) {
+            let _ = fs::remove_dir_all(sandbox);
+            return;
+        }
+
+        let service = AssetService::new(&root).expect("create asset service");
+
+        assert!(service.read_text("music/escape/secret.txt").is_err());
+        assert!(service.write_text("music/escape/new.txt", "outside").is_err());
+        assert!(!outside.join("new.txt").exists());
+
+        let _ = fs::remove_dir_all(sandbox);
+    }
 }

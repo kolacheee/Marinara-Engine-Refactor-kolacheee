@@ -506,10 +506,34 @@ function gameCarryoverPatch(meta: Record<string, unknown>) {
     "enableSpriteGeneration",
     "gameImageConnectionId",
     "activeLorebookIds",
+    "gameInventory",
+    "gameWidgetState",
+    "gameTime",
+    "gameTimeFormatted",
+    "gameWeather",
+    "gameMorale",
+    "gameMoraleTier",
+    "gamePlayerNotes",
+    "gameJournal",
     "gameSessionLorebookId",
     "gameSessionLorebookEntryCount",
+    "gameJournal",
   ];
   return Object.fromEntries(keys.filter((key) => key in meta).map((key) => [key, meta[key]]));
+}
+
+function gameStateCarryoverPatch(previousChat: Chat | null | undefined, nextChatId: string): Record<string, unknown> {
+  const previousGameState = asRecord((previousChat as { gameState?: unknown } | null | undefined)?.gameState);
+  if (Object.keys(previousGameState).length === 0) return {};
+  return {
+    gameState: {
+      ...previousGameState,
+      id: "",
+      chatId: nextChatId,
+      messageId: "",
+      createdAt: nowIso(),
+    },
+  };
 }
 
 function normalizeJournalEntry(type: string, data: Record<string, unknown>): Pick<JournalEntry, "type" | "title" | "content"> {
@@ -878,7 +902,8 @@ export const gameApi = {
     const chats = await storageApi.list<Chat>("chats");
     const existing = chats.filter((chat) => chatMeta(chat).gameId === data.gameId).sort((a, b) => gameSessionSortValue(a) - gameSessionSortValue(b));
     const sessionNumber = existing.length + 1;
-    const previousMeta = chatMeta(existing[existing.length - 1]);
+    const previousChat = existing[existing.length - 1] ?? null;
+    const previousMeta = chatMeta(previousChat);
     const summaries = Array.isArray(previousMeta.gamePreviousSessionSummaries)
       ? [...(previousMeta.gamePreviousSessionSummaries as SessionSummary[])].sort((a, b) => a.sessionNumber - b.sessionNumber)
       : [];
@@ -902,11 +927,15 @@ export const gameApi = {
         recap = buildSessionCarryoverContext(summaries);
       }
     }
+    const sessionChatId = newId("chat");
     const sessionChat = await createChatRecord({
+      id: sessionChatId,
       name: `Game Session ${sessionNumber}`,
       mode: "game",
-      characterIds: [],
-      connectionId: data.connectionId ?? null,
+      characterIds: Array.isArray(previousChat?.characterIds) ? previousChat.characterIds : [],
+      personaId: previousChat?.personaId ?? null,
+      connectionId: data.connectionId ?? previousChat?.connectionId ?? null,
+      ...gameStateCarryoverPatch(previousChat, sessionChatId),
       metadata: {
         ...gameCarryoverPatch(previousMeta),
         gameId: data.gameId,
@@ -915,7 +944,7 @@ export const gameApi = {
         gameActiveState: "exploration",
         gamePreviousSessionSummaries: summaries,
         gameSessionCarryover: buildSessionCarryoverContext(summaries),
-        gameJournal: createJournal(),
+        gameJournal: journalFromMeta(previousMeta),
       },
     });
     if (recap.trim()) {

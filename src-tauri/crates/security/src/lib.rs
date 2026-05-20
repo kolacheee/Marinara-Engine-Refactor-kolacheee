@@ -37,13 +37,33 @@ pub fn assert_inside_dir(base: &Path, path: &Path) -> AppResult<PathBuf> {
     } else {
         base.join(path)
     };
-    let canonical_base = base.canonicalize().unwrap_or_else(|_| base.to_path_buf());
-    let canonical_path = joined.canonicalize().unwrap_or(joined);
+    let canonical_base = base.canonicalize().map_err(AppError::from)?;
+    let canonical_path = canonicalize_existing_prefix(&joined)?;
     if canonical_path.starts_with(&canonical_base) {
         Ok(canonical_path)
     } else {
         Err(AppError::invalid_input("Path is outside the allowed directory"))
     }
+}
+
+fn canonicalize_existing_prefix(path: &Path) -> AppResult<PathBuf> {
+    let mut missing = Vec::new();
+    let mut current = path;
+    while !current.exists() {
+        let Some(parent) = current.parent() else {
+            return Err(AppError::invalid_input("Path has no existing parent"));
+        };
+        if let Some(name) = current.file_name() {
+            missing.push(name.to_os_string());
+        }
+        current = parent;
+    }
+
+    let mut canonical = current.canonicalize().map_err(AppError::from)?;
+    for component in missing.iter().rev() {
+        canonical.push(component);
+    }
+    Ok(canonical)
 }
 
 pub fn is_allowed_outbound_url(raw: &str, allow_local: bool) -> bool {

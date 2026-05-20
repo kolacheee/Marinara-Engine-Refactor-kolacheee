@@ -15,7 +15,7 @@ import type { GameCheckpoint, CheckpointTrigger } from "../../../engine/contract
 interface GameCheckpointsProps {
   chatId: string;
   onClose: () => void;
-  onLoaded?: () => void;
+  onLoaded?: (result: { gameState?: unknown; metadata?: Record<string, unknown> }) => void;
 }
 
 const TRIGGER_ICONS: Record<CheckpointTrigger, typeof Save> = {
@@ -75,10 +75,10 @@ export function GameCheckpoints({ chatId, onClose, onLoaded }: GameCheckpointsPr
       loadCheckpoint.mutate(
         { chatId, checkpointId: cp.id },
         {
-          onSuccess: () => {
+          onSuccess: (result) => {
             toast.success(`Loaded: ${cp.label}`);
             setConfirmLoadId(null);
-            onLoaded?.();
+            onLoaded?.(result);
           },
           onError: () => toast.error("Failed to load checkpoint"),
         },

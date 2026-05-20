@@ -1,5 +1,5 @@
 use super::images::percent_encode_component;
-use super::media_uploads::{persist_image_upload, safe_filename};
+use super::media_uploads::{persist_image_upload, remove_managed_record_file, safe_filename};
 use super::shared::decode_path;
 use super::*;
 
@@ -10,9 +10,9 @@ pub(crate) fn update_lorebook_image(
     lorebook_id: &str,
     body: Value,
 ) -> AppResult<Value> {
-    get_required_lorebook(state, lorebook_id)?;
+    let previous = get_required_lorebook(state, lorebook_id)?;
     let stored = persist_image_upload(state, "lorebooks/images", lorebook_id, &body, "image")?;
-    state.storage.patch(
+    let updated = state.storage.patch(
         "lorebooks",
         lorebook_id,
         json!({
@@ -21,6 +21,18 @@ pub(crate) fn update_lorebook_image(
             "imageFilename": stored.filename,
             "imageUpdatedAt": now_iso()
         }),
+    )?;
+    remove_lorebook_image_file(state, &previous);
+    Ok(updated)
+}
+
+pub(crate) fn remove_lorebook_image_file(state: &AppState, record: &Value) {
+    remove_managed_record_file(
+        state,
+        "lorebooks/images",
+        record,
+        "imageFilePath",
+        "imageFilename",
     )
 }
 

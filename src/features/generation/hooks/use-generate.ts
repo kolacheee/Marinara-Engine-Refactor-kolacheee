@@ -30,8 +30,13 @@ import { useGameStateStore } from "../../world-state/stores/world-state.store";
 import { worldStateApi } from "../../world-state/api/world-state-api";
 import { chatKeys } from "../../chats/hooks/use-chats";
 import { characterKeys } from "../../characters/hooks/use-characters";
+import {
+  applyGenerationReplayToRegenerateInput,
+  type GenerationReplayInput,
+  type GenerationReplay,
+} from "../../../engine/generation/generation-replay";
 
-export type GenerateArgs = {
+export type GenerateArgs = GenerationReplayInput & {
   chatId: string;
   connectionId?: string | null;
   message?: string;
@@ -41,6 +46,7 @@ export type GenerateArgs = {
 type StreamEvent = { type: string; data?: unknown };
 type QueryClient = ReturnType<typeof useQueryClient>;
 type GenerationStreamFactory = (args: GenerateArgs, signal: AbortSignal) => AsyncGenerator<StreamEvent>;
+const HAPTIC_COMMAND_INTERVAL_MS = 225;
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -109,6 +115,12 @@ function parseMaybeRecord(value: unknown): Record<string, unknown> {
     }
   }
   return isRecord(value) ? value : {};
+}
+
+function readGenerationReplay(value: unknown): GenerationReplay | null {
+  const record = parseMaybeRecord(value);
+  const replay = record.generationReplay;
+  return isRecord(replay) ? (replay as GenerationReplay) : null;
 }
 
 const editableCharacterCardFieldSet = new Set<string>(EDITABLE_CHARACTER_CARD_FIELDS);
@@ -582,6 +594,34 @@ function applyAssistantAction(rawData: unknown) {
   }
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function applyHapticAgentResult(rawData: unknown) {
+  const data = parseMaybeRecord(rawData);
+  const rawCommands = Array.isArray(data.commands) ? data.commands : [];
+  for (const rawCommand of rawCommands) {
+    if (!isRecord(rawCommand)) continue;
+    const action = readString(rawCommand.action).trim();
+    if (!action) continue;
+    try {
+      await integrationGateway.haptic.command({
+        deviceIndex:
+          rawCommand.deviceIndex === "all" || typeof rawCommand.deviceIndex === "number"
+            ? rawCommand.deviceIndex
+            : "all",
+        action,
+        ...(typeof rawCommand.intensity === "number" ? { intensity: rawCommand.intensity } : {}),
+        ...(typeof rawCommand.duration === "number" ? { duration: rawCommand.duration } : {}),
+      });
+      await delay(HAPTIC_COMMAND_INTERVAL_MS);
+    } catch (error) {
+      console.warn("Failed to send haptic agent command", error);
+    }
+  }
+}
+
 async function applyAgentResultEffects(
   queryClient: ReturnType<typeof useQueryClient>,
   chatId: string,
@@ -630,6 +670,7 @@ async function applyAgentResultEffects(
     if (pending.length) useUIStore.getState().openModal("character-card-update");
   }
 
+  if (result.type === "haptic_command" || result.agentType === "haptic") await applyHapticAgentResult(result.data);
   if (result.type === "background_change") applyBackgroundChoice(data.chosen);
   if (result.agentType === "quest") applyQuestUpdates(result.data);
   await applyTrackerResultToGameState(chatId, result);
@@ -753,10 +794,27 @@ export function useGenerate() {
   const queryClient = useQueryClient();
 
   const generate = useCallback(
-    (args: GenerateArgs): Promise<boolean> =>
-      runGenerationWithUi(
+    async (args: GenerateArgs): Promise<boolean> => {
+      const adjustedArgs = await (async () => {
+        const regenerateMessageId = readString(args.regenerateMessageId).trim();
+        const chatId = readString(args.chatId).trim();
+        if (!regenerateMessageId || !chatId) return args;
+
+        const cachedMessages = queryClient.getQueryData<InfiniteData<Message[]>>(chatKeys.messages(chatId));
+        const cachedMessage = cachedMessages?.pages.flat().find((message) => readString(message.id) === regenerateMessageId);
+        const storedMessage = cachedMessage ?? (await storageApi.get<Message>("messages", regenerateMessageId).catch(() => null));
+        if (!storedMessage || readString(storedMessage.chatId).trim() !== chatId) return args;
+        const replay = readGenerationReplay(storedMessage?.extra);
+        if (!replay) return args;
+
+        const nextArgs = { ...args };
+        applyGenerationReplayToRegenerateInput(nextArgs, replay);
+        return nextArgs;
+      })();
+
+      return runGenerationWithUi(
         queryClient,
-        args,
+        adjustedArgs,
         (streamArgs, signal) =>
           startGeneration(
             { storage: storageApi, llm: llmApi, integrations: integrationGateway },
@@ -777,7 +835,8 @@ export function useGenerate() {
             });
           },
         },
-      ),
+      );
+    },
     [queryClient],
   );
 

@@ -12,6 +12,12 @@ const STORAGE_KEY = "marinara-active-chat-id";
 const DRAFTS_KEY = "marinara-input-drafts";
 
 type NotificationAvatarCrop = AvatarCropValue | null;
+type NewChatSetupIntent = {
+  chatId: string;
+  openSettings: boolean;
+  openWizard: boolean;
+  shortcutMode: boolean;
+};
 
 /** Read drafts from localStorage so typed input survives reloads, tab closes, and app restarts. */
 function loadDrafts(): Map<string, string> {
@@ -82,6 +88,8 @@ interface ChatState {
   shouldOpenWizard: boolean;
   /** When true (and the wizard opens), it should land directly on the Quick Setup shortcut view. */
   shouldOpenWizardInShortcutMode: boolean;
+  /** Targeted setup intent for a newly created chat. */
+  newChatSetupIntent: NewChatSetupIntent | null;
   /** Pending new-chat mode for first-run connection setup gating. */
   pendingNewChatMode: Exclude<ChatMode, "visual_novel"> | null;
   /** Per-chat draft input text so typing isn't lost when navigating away. */
@@ -131,9 +139,10 @@ interface ChatState {
   setPerChatDelayed: (chatId: string, info: { name: string; status: string } | null) => void;
   clearPerChatState: (chatId: string) => void;
   setSwipeIndex: (messageId: string, index: number) => void;
-  setShouldOpenSettings: (v: boolean) => void;
-  setShouldOpenWizard: (v: boolean) => void;
-  setShouldOpenWizardInShortcutMode: (v: boolean) => void;
+  setShouldOpenSettings: (v: boolean, chatId?: string) => void;
+  setShouldOpenWizard: (v: boolean, chatId?: string) => void;
+  setShouldOpenWizardInShortcutMode: (v: boolean, chatId?: string) => void;
+  consumeNewChatSetupIntent: (chatId: string) => NewChatSetupIntent | null;
   setPendingNewChatMode: (mode: Exclude<ChatMode, "visual_novel"> | null) => void;
   setInputDraft: (chatId: string, text: string) => void;
   clearInputDraft: (chatId: string) => void;
@@ -192,6 +201,7 @@ export const useChatStore = create<ChatState>()(
     shouldOpenSettings: false,
     shouldOpenWizard: false,
     shouldOpenWizardInShortcutMode: false,
+    newChatSetupIntent: null,
     pendingNewChatMode: null,
     inputDrafts: loadDrafts(),
     currentInput: "",
@@ -426,11 +436,73 @@ export const useChatStore = create<ChatState>()(
         };
       }),
 
-    setShouldOpenSettings: (v) => set({ shouldOpenSettings: v }),
+    setShouldOpenSettings: (v, chatId) =>
+      set((state) => ({
+        shouldOpenSettings: v,
+        newChatSetupIntent:
+          v && chatId
+            ? {
+                chatId,
+                openSettings: true,
+                openWizard: state.newChatSetupIntent?.chatId === chatId ? state.newChatSetupIntent.openWizard : false,
+                shortcutMode:
+                  state.newChatSetupIntent?.chatId === chatId ? state.newChatSetupIntent.shortcutMode : false,
+              }
+            : v
+              ? state.newChatSetupIntent
+              : null,
+      })),
 
-    setShouldOpenWizard: (v) => set({ shouldOpenWizard: v }),
+    setShouldOpenWizard: (v, chatId) =>
+      set((state) => ({
+        shouldOpenWizard: v,
+        newChatSetupIntent:
+          v && chatId
+            ? {
+                chatId,
+                openSettings:
+                  state.newChatSetupIntent?.chatId === chatId ? state.newChatSetupIntent.openSettings : true,
+                openWizard: true,
+                shortcutMode:
+                  state.newChatSetupIntent?.chatId === chatId ? state.newChatSetupIntent.shortcutMode : false,
+              }
+            : v
+              ? state.newChatSetupIntent
+              : state.newChatSetupIntent
+                ? { ...state.newChatSetupIntent, openWizard: false }
+                : null,
+      })),
 
-    setShouldOpenWizardInShortcutMode: (v) => set({ shouldOpenWizardInShortcutMode: v }),
+    setShouldOpenWizardInShortcutMode: (v, chatId) =>
+      set((state) => ({
+        shouldOpenWizardInShortcutMode: v,
+        newChatSetupIntent:
+          v && chatId
+            ? {
+                chatId,
+                openSettings:
+                  state.newChatSetupIntent?.chatId === chatId ? state.newChatSetupIntent.openSettings : true,
+                openWizard: state.newChatSetupIntent?.chatId === chatId ? state.newChatSetupIntent.openWizard : true,
+                shortcutMode: true,
+              }
+            : v
+              ? state.newChatSetupIntent
+              : state.newChatSetupIntent
+                ? { ...state.newChatSetupIntent, shortcutMode: false }
+                : null,
+      })),
+
+    consumeNewChatSetupIntent: (chatId) => {
+      const intent = get().newChatSetupIntent;
+      if (!intent || intent.chatId !== chatId) return null;
+      set({
+        newChatSetupIntent: null,
+        shouldOpenSettings: false,
+        shouldOpenWizard: false,
+        shouldOpenWizardInShortcutMode: false,
+      });
+      return intent;
+    },
 
     setPendingNewChatMode: (mode) => set({ pendingNewChatMode: mode }),
 
@@ -566,6 +638,10 @@ export const useChatStore = create<ChatState>()(
         perChatTyping: new Map(),
         perChatDelayed: new Map(),
         swipeIndex: new Map(),
+        shouldOpenSettings: false,
+        shouldOpenWizard: false,
+        shouldOpenWizardInShortcutMode: false,
+        newChatSetupIntent: null,
         pendingNewChatMode: null,
         inputDrafts: new Map(),
         currentInput: "",

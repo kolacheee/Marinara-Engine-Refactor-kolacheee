@@ -2,12 +2,18 @@ import type { LlmChunk, LlmGateway, LlmRequest } from "../../engine/capabilities
 import { Channel } from "@tauri-apps/api/core";
 import { invokeTauri } from "./tauri-client";
 
+function createStreamId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `llm-stream-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export const llmApi: LlmGateway = {
   complete: (request: LlmRequest) =>
     invokeTauri("llm_complete", {
       request,
     }),
   stream: async function* (request: LlmRequest, signal?: AbortSignal): AsyncGenerator<LlmChunk> {
+    const streamId = createStreamId();
     const queue: LlmChunk[] = [];
     let completed = false;
     let failure: unknown = null;
@@ -19,6 +25,7 @@ export const llmApi: LlmGateway = {
     };
     const abort = () => {
       failure = new DOMException("The operation was aborted.", "AbortError");
+      void invokeTauri("llm_stream_cancel", { streamId }).catch(() => undefined);
       notify();
     };
 
@@ -34,6 +41,7 @@ export const llmApi: LlmGateway = {
     });
 
     const command = invokeTauri<void>("llm_stream_channel", {
+      streamId,
       request,
       onEvent,
     }).catch((error) => {

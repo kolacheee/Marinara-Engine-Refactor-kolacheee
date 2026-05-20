@@ -279,8 +279,8 @@ export function ModeSurface() {
         {
           onSuccess: (chat) => {
             useChatStore.getState().setActiveChatId(chat.id);
-            useChatStore.getState().setShouldOpenSettings(true);
-            useChatStore.getState().setShouldOpenWizard(true);
+            useChatStore.getState().setShouldOpenSettings(true, chat.id);
+            useChatStore.getState().setShouldOpenWizard(true, chat.id);
           },
         },
       );
@@ -1237,19 +1237,30 @@ export function ModeSurface() {
   }, [activeChatId]);
 
   // Auto-open settings drawer for newly created chats
+  const newChatSetupIntent = useChatStore((s) => s.newChatSetupIntent);
   const shouldOpenSettings = useChatStore((s) => s.shouldOpenSettings);
   const shouldOpenWizard = useChatStore((s) => s.shouldOpenWizard);
   useEffect(() => {
-    if (shouldOpenSettings && activeChatId) {
-      if (shouldOpenWizard) {
+    if (!activeChatId) return;
+
+    const intent = useChatStore.getState().consumeNewChatSetupIntent(activeChatId);
+    if (intent) {
+      if (intent.openWizard) {
+        if (intent.shortcutMode) useChatStore.getState().setShouldOpenWizardInShortcutMode(true);
         setWizardOpen(true);
-        useChatStore.getState().setShouldOpenWizard(false);
-      } else {
+      } else if (intent.openSettings) {
         setSettingsOpen(true);
       }
+      return;
+    }
+
+    if (shouldOpenSettings && !newChatSetupIntent) {
+      if (shouldOpenWizard) setWizardOpen(true);
+      else setSettingsOpen(true);
+      useChatStore.getState().setShouldOpenWizard(false);
       useChatStore.getState().setShouldOpenSettings(false);
     }
-  }, [shouldOpenSettings, shouldOpenWizard, activeChatId]);
+  }, [newChatSetupIntent, shouldOpenSettings, shouldOpenWizard, activeChatId]);
 
   // Auto-scroll on new messages / streaming (but not on "load more")
   // Only scroll if user is already near the bottom (within 150px).

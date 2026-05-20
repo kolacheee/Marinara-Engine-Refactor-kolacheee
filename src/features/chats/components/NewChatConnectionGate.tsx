@@ -72,8 +72,8 @@ export function NewChatConnectionGate({ mode, onClose }: NewChatConnectionGatePr
               /* non-fatal — chat still opens with system defaults */
             }
           }
-          store.setShouldOpenSettings(true);
-          store.setShouldOpenWizard(true);
+          store.setShouldOpenSettings(true, chat.id);
+          store.setShouldOpenWizard(true, chat.id);
         },
       },
     );
