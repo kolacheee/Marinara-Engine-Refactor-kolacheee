@@ -181,6 +181,7 @@ fn default_allowed_origins() -> Vec<HeaderValue> {
         "http://localhost:1420",
         "http://127.0.0.1:1420",
         "tauri://localhost",
+        "http://tauri.localhost",
     ]
     .into_iter()
     .filter_map(|origin| HeaderValue::from_str(origin).ok())

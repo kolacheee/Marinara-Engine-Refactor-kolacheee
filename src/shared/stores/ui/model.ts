@@ -20,6 +20,7 @@ export type EchoChamberSide = "top-left" | "top-right" | "bottom-left" | "bottom
 export type UserStatus = "active" | "idle" | "dnd";
 export type RoleplayAvatarStyle = "circles" | "rectangles" | "panel";
 export type GameDialogueDisplayMode = "classic" | "stacked";
+export type RemoteRuntimeAuthMode = "none" | "basic" | "bearer";
 export interface FloatingWidgetPosition {
   x: number;
   y: number;
@@ -285,6 +286,10 @@ export interface UIState {
   spotifyPlayerEnabled: boolean;
   /** Optional remote Rust runtime URL. Blank uses the embedded Tauri backend. */
   remoteRuntimeUrl: string;
+  remoteRuntimeAuthMode: RemoteRuntimeAuthMode;
+  remoteRuntimeUsername: string;
+  remoteRuntimePassword: string;
+  remoteRuntimeApiKey: string;
   /** Mobile Spotify widget collapsed state. */
   spotifyMobileWidgetCollapsed: boolean;
   /** Mobile Spotify widget position in viewport pixels. */
@@ -481,6 +486,10 @@ export interface UIState {
   setSpeechToTextEnabled: (v: boolean) => void;
   setSpotifyPlayerEnabled: (v: boolean) => void;
   setRemoteRuntimeUrl: (v: string) => void;
+  setRemoteRuntimeAuthMode: (v: RemoteRuntimeAuthMode) => void;
+  setRemoteRuntimeUsername: (v: string) => void;
+  setRemoteRuntimePassword: (v: string) => void;
+  setRemoteRuntimeApiKey: (v: string) => void;
   setSpotifyMobileWidgetCollapsed: (v: boolean) => void;
   setSpotifyMobileWidgetPosition: (position: FloatingWidgetPosition) => void;
   setIntuitiveSwipeNavigation: (v: boolean) => void;

@@ -1,4 +1,5 @@
 import type { LlmChunk, LlmRequest } from "../../engine/capabilities/llm";
+import type { RemoteRuntimeAuthMode } from "../stores/ui/model";
 import { useUIStore } from "../stores/ui.store";
 import { ApiError } from "./api-errors";
 
@@ -40,20 +41,38 @@ type RuntimeTarget = {
   authorization?: string;
 };
 
+type RuntimeTargetInput = {
+  url: string;
+  authMode?: RemoteRuntimeAuthMode;
+  username?: string;
+  password?: string;
+  apiKey?: string;
+};
+
+export type RemoteRuntimeCheckResult =
+  | { status: "connected"; authRequired: false }
+  | { status: "auth-required"; authRequired: true }
+  | { status: "error"; authRequired: false; message: string };
+
 function encodeBasicAuth(username: string, password: string): string {
   return `Basic ${btoa(`${decodeURIComponent(username)}:${decodeURIComponent(password)}`)}`;
 }
 
-function normalizeRemoteRuntimeUrl(raw: string): RuntimeTarget | null {
-  const trimmed = raw.trim();
+function targetFromInput(input: RuntimeTargetInput): RuntimeTarget | null {
+  const trimmed = input.url.trim();
   if (!trimmed) return null;
   const url = new URL(trimmed);
   let authorization: string | undefined;
-  if (url.username || url.password) {
+  const authMode = input.authMode ?? "none";
+  if (authMode === "basic" && (input.username || input.password)) {
+    authorization = encodeBasicAuth(input.username ?? "", input.password ?? "");
+  } else if (authMode === "bearer" && input.apiKey) {
+    authorization = `Bearer ${input.apiKey}`;
+  } else if (url.username || url.password) {
     authorization = encodeBasicAuth(url.username, url.password);
-    url.username = "";
-    url.password = "";
   }
+  url.username = "";
+  url.password = "";
   url.pathname = url.pathname.replace(/\/+$/, "");
   url.search = "";
   url.hash = "";
@@ -62,7 +81,14 @@ function normalizeRemoteRuntimeUrl(raw: string): RuntimeTarget | null {
 
 export function remoteRuntimeTarget(): RuntimeTarget | null {
   try {
-    return normalizeRemoteRuntimeUrl(useUIStore.getState().remoteRuntimeUrl);
+    const state = useUIStore.getState();
+    return targetFromInput({
+      url: state.remoteRuntimeUrl,
+      authMode: state.remoteRuntimeAuthMode,
+      username: state.remoteRuntimeUsername,
+      password: state.remoteRuntimePassword,
+      apiKey: state.remoteRuntimeApiKey,
+    });
   } catch {
     return null;
   }
@@ -77,6 +103,39 @@ function remoteHeaders(target: RuntimeTarget, extra?: HeadersInit): HeadersInit 
     ...(target.authorization ? { Authorization: target.authorization } : {}),
     ...extra,
   };
+}
+
+export function remoteRuntimeTargetFromInput(input: RuntimeTargetInput): RuntimeTarget | null {
+  return targetFromInput(input);
+}
+
+export async function checkRemoteRuntime(input: RuntimeTargetInput): Promise<RemoteRuntimeCheckResult> {
+  const target = remoteRuntimeTargetFromInput(input);
+  if (!target) return { status: "error", authRequired: false, message: "Remote runtime URL is required" };
+  try {
+    const health = await fetch(`${target.baseUrl}/health`, {
+      method: "GET",
+      headers: remoteHeaders(target, { accept: "application/json" }),
+    });
+    if (!health.ok) {
+      return { status: "error", authRequired: false, message: `Health check returned ${health.status}` };
+    }
+    const response = await fetch(`${target.baseUrl}/api/invoke`, {
+      method: "POST",
+      headers: remoteHeaders(target, { "content-type": "application/json" }),
+      body: JSON.stringify({ command: "storage_list", args: { entity: "connections" } }),
+    });
+    if (response.ok) return { status: "connected", authRequired: false };
+    if (response.status === 401) return { status: "auth-required", authRequired: true };
+    const error = await readRemoteError(response);
+    return { status: "error", authRequired: false, message: error.message };
+  } catch (error) {
+    return {
+      status: "error",
+      authRequired: false,
+      message: error instanceof Error ? error.message : "Remote runtime check failed",
+    };
+  }
 }
 
 async function readRemoteError(response: Response): Promise<ApiError> {

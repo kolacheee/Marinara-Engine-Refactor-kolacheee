@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { gameAssetsApi } from "../../../shared/api/assets-api";
 import { importApi } from "../../../shared/api/import-api";
 import { profileApi } from "../../../shared/api/profile-api";
+import { checkRemoteRuntime } from "../../../shared/api/remote-runtime";
 import { backgroundsApi, fontsApi } from "../../../shared/api/settings-assets-api";
 import { storageApi } from "../../../shared/api/storage-api";
 import { chatBackgroundMetadataToUrl, chatBackgroundUrlToMetadata } from "../../../shared/lib/backgrounds";
@@ -2802,12 +2803,23 @@ function AdvancedSettings() {
   const setDebugMode = useUIStore((s) => s.setDebugMode);
   const remoteRuntimeUrl = useUIStore((s) => s.remoteRuntimeUrl);
   const setRemoteRuntimeUrl = useUIStore((s) => s.setRemoteRuntimeUrl);
+  const remoteRuntimeAuthMode = useUIStore((s) => s.remoteRuntimeAuthMode);
+  const setRemoteRuntimeAuthMode = useUIStore((s) => s.setRemoteRuntimeAuthMode);
+  const remoteRuntimeUsername = useUIStore((s) => s.remoteRuntimeUsername);
+  const setRemoteRuntimeUsername = useUIStore((s) => s.setRemoteRuntimeUsername);
+  const remoteRuntimePassword = useUIStore((s) => s.remoteRuntimePassword);
+  const setRemoteRuntimePassword = useUIStore((s) => s.setRemoteRuntimePassword);
+  const remoteRuntimeApiKey = useUIStore((s) => s.remoteRuntimeApiKey);
+  const setRemoteRuntimeApiKey = useUIStore((s) => s.setRemoteRuntimeApiKey);
   const clearAllData = useClearAllData();
   const expungeData = useExpungeData();
   const [selectedScopes, setSelectedScopes] = useState<ExpungeScope[]>(["chats"]);
   const [confirmAction, setConfirmAction] = useState<"selected" | "all" | null>(null);
   const [exportingProfile, setExportingProfile] = useState(false);
   const [refreshingSpa, setRefreshingSpa] = useState(false);
+  const [checkingRuntime, setCheckingRuntime] = useState(false);
+  const [runtimeStatus, setRuntimeStatus] = useState<"idle" | "connected" | "auth-required" | "error">("idle");
+  const [runtimeMessage, setRuntimeMessage] = useState("");
   const [adminSecret, setAdminSecret] = useState(() => localStorage.getItem(ADMIN_SECRET_STORAGE_KEY) ?? "");
   const [quickRepliesDrawerOpen, setQuickRepliesDrawerOpen] = useState(true);
 
@@ -2847,6 +2859,49 @@ function AdvancedSettings() {
     } catch (err) {
       setRefreshingSpa(false);
       toast.error(err instanceof Error ? err.message : "Failed to refresh the app");
+    }
+  };
+
+  const handleConnectRemoteRuntime = async () => {
+    if (checkingRuntime) return;
+    const url = remoteRuntimeUrl.trim();
+    if (!url) {
+      setRemoteRuntimeUrl("");
+      setRuntimeStatus("idle");
+      setRuntimeMessage("");
+      toast.info("Remote runtime disabled. The app will use local Tauri.");
+      return;
+    }
+
+    setCheckingRuntime(true);
+    setRuntimeStatus("idle");
+    setRuntimeMessage("");
+    try {
+      const result = await checkRemoteRuntime({
+        url,
+        authMode: remoteRuntimeAuthMode,
+        username: remoteRuntimeUsername,
+        password: remoteRuntimePassword,
+        apiKey: remoteRuntimeApiKey,
+      });
+      if (result.status === "connected") {
+        setRuntimeStatus("connected");
+        setRuntimeMessage("Connected");
+        toast.success("Remote runtime connected");
+        return;
+      }
+      if (result.status === "auth-required") {
+        setRuntimeStatus("auth-required");
+        setRuntimeMessage("Credentials required");
+        if (remoteRuntimeAuthMode === "none") setRemoteRuntimeAuthMode("basic");
+        toast.info("Remote runtime requires credentials.");
+        return;
+      }
+      setRuntimeStatus("error");
+      setRuntimeMessage(result.message);
+      toast.error(result.message);
+    } finally {
+      setCheckingRuntime(false);
     }
   };
 
@@ -2921,44 +2976,117 @@ function AdvancedSettings() {
           <span className="text-xs font-medium">Runtime</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => void handleForceRefreshSpa()}
-            disabled={refreshingSpa}
-            className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--background)]/70 px-3 py-2 text-xs font-medium text-[var(--foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {refreshingSpa ? (
-              <>
-                <Loader2 size="0.8125rem" className="animate-spin" />
-                Refreshing…
-              </>
-            ) : (
-              <>
-                <RefreshCw size="0.8125rem" />
-                Refresh App
-              </>
-            )}
-          </button>
-          <HelpTooltip
-            side="bottom"
-            text="Manual refresh unregisters the active service worker and clears browser caches before reloading. Marinara's stored chats, settings, and other local app data stay intact."
-          />
-        </div>
-
         <div className="flex flex-col gap-1.5 rounded-lg bg-[var(--secondary)]/35 p-2.5 ring-1 ring-[var(--border)]">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-medium">Remote Runtime URL</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium">Remote Runtime</span>
+              {runtimeStatus !== "idle" && (
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[0.625rem] font-medium",
+                    runtimeStatus === "connected"
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : runtimeStatus === "auth-required"
+                        ? "bg-amber-500/10 text-amber-400"
+                        : "bg-rose-500/10 text-rose-400",
+                  )}
+                >
+                  {runtimeMessage}
+                </span>
+              )}
+            </div>
             <HelpTooltip text="Blank uses the embedded Tauri backend. Set this to a Marinara Rust server URL to route supported storage and generation calls through the remote runtime." />
           </div>
           <input
             type="url"
             value={remoteRuntimeUrl}
-            onChange={(event) => setRemoteRuntimeUrl(event.target.value)}
+            onChange={(event) => {
+              setRemoteRuntimeUrl(event.target.value);
+              setRuntimeStatus("idle");
+              setRuntimeMessage("");
+            }}
             placeholder="http://127.0.0.1:8787"
             className="rounded-lg bg-[var(--background)] px-3 py-2 text-xs outline-none ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)]/50 focus:ring-[var(--primary)]"
           />
-          <div className="text-[0.625rem] text-[var(--muted-foreground)]">
-            Supports reverse-proxy Basic Auth with https://user:password@example.com.
+          {(runtimeStatus === "auth-required" || remoteRuntimeAuthMode !== "none") && (
+            <div className="grid gap-2 rounded-lg bg-[var(--background)]/45 p-2 ring-1 ring-[var(--border)]">
+              <div className="grid grid-cols-3 gap-1 rounded-lg bg-[var(--secondary)]/50 p-1">
+                {[
+                  { id: "basic", label: "User/Pass" },
+                  { id: "bearer", label: "API Key" },
+                  { id: "none", label: "None" },
+                ].map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => {
+                      setRemoteRuntimeAuthMode(option.id as typeof remoteRuntimeAuthMode);
+                      setRuntimeStatus("idle");
+                      setRuntimeMessage("");
+                    }}
+                    className={cn(
+                      "rounded-md px-2 py-1.5 text-[0.6875rem] font-medium transition-colors",
+                      remoteRuntimeAuthMode === option.id
+                        ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+                        : "text-[var(--muted-foreground)] hover:bg-[var(--background)] hover:text-[var(--foreground)]",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              {remoteRuntimeAuthMode === "basic" && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input
+                    type="text"
+                    value={remoteRuntimeUsername}
+                    onChange={(event) => setRemoteRuntimeUsername(event.target.value)}
+                    placeholder="Username"
+                    className="rounded-lg bg-[var(--background)] px-3 py-2 text-xs outline-none ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)]/50 focus:ring-[var(--primary)]"
+                  />
+                  <input
+                    type="password"
+                    value={remoteRuntimePassword}
+                    onChange={(event) => setRemoteRuntimePassword(event.target.value)}
+                    placeholder="Password"
+                    className="rounded-lg bg-[var(--background)] px-3 py-2 text-xs outline-none ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)]/50 focus:ring-[var(--primary)]"
+                  />
+                </div>
+              )}
+              {remoteRuntimeAuthMode === "bearer" && (
+                <input
+                  type="password"
+                  value={remoteRuntimeApiKey}
+                  onChange={(event) => setRemoteRuntimeApiKey(event.target.value)}
+                  placeholder="API key"
+                  className="rounded-lg bg-[var(--background)] px-3 py-2 text-xs outline-none ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)]/50 focus:ring-[var(--primary)]"
+                />
+              )}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleConnectRemoteRuntime()}
+              disabled={checkingRuntime}
+              className="flex min-w-28 items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)] transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {checkingRuntime ? <Loader2 size="0.8125rem" className="animate-spin" /> : <Power size="0.8125rem" />}
+              {checkingRuntime ? "Connecting…" : "Connect"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleForceRefreshSpa()}
+              disabled={refreshingSpa}
+              className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--background)]/70 px-3 py-2 text-xs font-medium text-[var(--foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {refreshingSpa ? <Loader2 size="0.8125rem" className="animate-spin" /> : <RefreshCw size="0.8125rem" />}
+              {refreshingSpa ? "Reloading…" : "Reload App"}
+            </button>
+            <HelpTooltip
+              side="bottom"
+              text="Connect checks the remote runtime before supported calls use it. Reload restarts the UI after changing runtime targets."
+            />
           </div>
         </div>
       </div>

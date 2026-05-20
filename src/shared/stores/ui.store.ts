@@ -147,6 +147,10 @@ export const useUIStore = create<UIState>()(
       speechToTextEnabled: false,
       spotifyPlayerEnabled: false,
       remoteRuntimeUrl: "",
+      remoteRuntimeAuthMode: "none",
+      remoteRuntimeUsername: "",
+      remoteRuntimePassword: "",
+      remoteRuntimeApiKey: "",
       spotifyMobileWidgetCollapsed: true,
       spotifyMobileWidgetPosition: { x: 16, y: 96 },
       intuitiveSwipeNavigation: false,
@@ -389,6 +393,10 @@ export const useUIStore = create<UIState>()(
       setSpeechToTextEnabled: (v) => set({ speechToTextEnabled: v }),
       setSpotifyPlayerEnabled: (v) => set({ spotifyPlayerEnabled: v }),
       setRemoteRuntimeUrl: (v) => set({ remoteRuntimeUrl: v.trim() }),
+      setRemoteRuntimeAuthMode: (v) => set({ remoteRuntimeAuthMode: v }),
+      setRemoteRuntimeUsername: (v) => set({ remoteRuntimeUsername: v.trim() }),
+      setRemoteRuntimePassword: (v) => set({ remoteRuntimePassword: v }),
+      setRemoteRuntimeApiKey: (v) => set({ remoteRuntimeApiKey: v.trim() }),
       setSpotifyMobileWidgetCollapsed: (v) => set({ spotifyMobileWidgetCollapsed: v }),
       setSpotifyMobileWidgetPosition: (position) =>
         set({
