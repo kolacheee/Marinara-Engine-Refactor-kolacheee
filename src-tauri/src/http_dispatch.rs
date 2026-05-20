@@ -1,6 +1,6 @@
 use crate::builtins::is_protected_record;
 use crate::state::AppState;
-use crate::storage_commands::{avatars, chats, llm, lorebook_images, shared};
+use crate::storage_commands::{avatars, chats, generation, images, imports, llm, lorebook_images, shared};
 use marinara_core::{AppError, AppResult};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -53,6 +53,24 @@ pub async fn dispatch(state: &AppState, request: InvokeRequest) -> AppResult<Val
         "chat_message_delete_swipe" => chat_message_delete_swipe(state, &args),
         "chat_autonomous_unread_mark" => chat_autonomous_unread_mark(state, &args),
         "chat_autonomous_unread_clear" => chat_autonomous_unread_clear(state, &args),
+        "connection_test" => connection_test(state, &args).await,
+        "connection_test_message" => connection_test_message(state, &args).await,
+        "connection_test_image" => connection_test_image(state, &args).await,
+        "connection_models" => connection_models(state, &args).await,
+        "connection_save_default_parameters" => connection_save_default_parameters(state, &args),
+        "import_marinara" => import_call(state, &args, &["marinara"], "envelope"),
+        "import_marinara_file" => import_call(state, &args, &["marinara-file"], "body"),
+        "import_st_character" => import_call(state, &args, &["st-character"], "body"),
+        "import_st_character_batch" => import_call(state, &args, &["st-character", "batch"], "body"),
+        "import_st_character_inspect" => {
+            import_call(state, &args, &["st-character", "inspect"], "body")
+        }
+        "import_st_chat" => import_call(state, &args, &["st-chat"], "body"),
+        "import_st_chat_into_group" => import_call(state, &args, &["st-chat-into-group"], "body"),
+        "import_st_preset" => import_call(state, &args, &["st-preset"], "payload"),
+        "import_st_lorebook" => import_call(state, &args, &["st-lorebook"], "payload"),
+        "import_st_bulk_scan" => import_call(state, &args, &["st-bulk", "scan"], "payload"),
+        "import_st_bulk_run" => import_call(state, &args, &["st-bulk", "run"], "payload"),
         "llm_complete" => llm::llm_complete(state, optional_value(&args, "request")).await,
         "llm_list_models" => {
             llm::llm_models(state, optional_string(&args, "connectionId").as_deref()).await
@@ -215,6 +233,42 @@ fn chat_autonomous_unread_mark(state: &AppState, args: &Map<String, Value>) -> A
 
 fn chat_autonomous_unread_clear(state: &AppState, args: &Map<String, Value>) -> AppResult<Value> {
     chats::clear_autonomous_unread(state, required_string(args, "chatId")?)
+}
+
+async fn connection_test(state: &AppState, args: &Map<String, Value>) -> AppResult<Value> {
+    generation::test_connection(state, required_string(args, "id")?).await
+}
+
+async fn connection_test_message(state: &AppState, args: &Map<String, Value>) -> AppResult<Value> {
+    generation::test_message(state, required_string(args, "id")?).await
+}
+
+async fn connection_test_image(state: &AppState, args: &Map<String, Value>) -> AppResult<Value> {
+    images::test_image_generation(state, required_string(args, "id")?).await
+}
+
+async fn connection_models(state: &AppState, args: &Map<String, Value>) -> AppResult<Value> {
+    llm::connection_models(state, required_string(args, "id")?).await
+}
+
+fn connection_save_default_parameters(
+    state: &AppState,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    state.storage.patch(
+        "connections",
+        required_string(args, "id")?,
+        json!({ "defaultParameters": optional_value(args, "params") }),
+    )
+}
+
+fn import_call(
+    state: &AppState,
+    args: &Map<String, Value>,
+    rest: &[&str],
+    payload_key: &str,
+) -> AppResult<Value> {
+    imports::import_call(state, rest, optional_value(args, payload_key))
 }
 
 fn llm_stream_cancel(state: &AppState, args: &Map<String, Value>) -> AppResult<Value> {

@@ -29,13 +29,13 @@ mod fonts;
 #[path = "storage/game_assets.rs"]
 mod game_assets;
 #[path = "storage/generation.rs"]
-mod generation;
+pub(crate) mod generation;
 #[path = "storage/http.rs"]
 mod http;
 #[path = "storage/images.rs"]
-mod images;
+pub(crate) mod images;
 #[path = "storage/imports.rs"]
-mod imports;
+pub(crate) mod imports;
 #[path = "storage/integrations.rs"]
 mod integrations;
 #[path = "storage/knowledge.rs"]
