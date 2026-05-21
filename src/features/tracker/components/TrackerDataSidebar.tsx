@@ -4,24 +4,30 @@ import type { InventoryItem, PresentCharacter, QuestProgress } from "../../../en
 import type { Persona } from "../../../engine/contracts/types/persona";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
-import { useGameStateStore } from "../../world-state/stores/world-state.store";
-import { worldStateApi } from "../../world-state/api/world-state-api";
 import { useAgentStore } from "../../../shared/stores/agent.store";
 import { useChat, useChatMessages, useUpdateChatMetadata } from "../../chats/hooks/use-chats";
-import { useAgentConfigs, useUpdateAgent, type AgentConfigRow } from "../../agents/hooks/use-agents";
 import { useCharacters, usePersonas } from "../../characters/hooks/use-characters";
 import { useGenerate } from "../../generation/hooks/use-generate";
-import { useGameStatePatcher } from "../../world-state/hooks/use-world-state-patcher";
-import { npcAvatarApi } from "../../../shared/api/avatar-api";
-import { parseCharacterDisplayData } from "../../../shared/lib/character-display";
-import { cn } from "../../../shared/lib/utils";
+import { useTrackerCharacterAvatarActions } from "../../world-state/hooks/use-tracker-character-avatar-actions";
+import { useTrackerStateController } from "../../world-state/hooks/use-tracker-state-controller";
+import {
+  appendTrackerListItem,
+  createManualCharacterStat,
+  createManualInventoryItem,
+  createManualPresentCharacter,
+  createManualQuest,
+  removeTrackerListItem,
+  replaceTrackerListItem,
+} from "../../world-state/lib/tracker-state-edits";
 import {
   TRACKER_AGENT_TYPE_IDS,
-  TRACKER_FEATURED_CHARACTER_META_KEY,
   TRACKER_SECTION_AGENT_TYPES,
   TRACKER_SECTION_RERUN_TITLES,
   type TrackerPanelSection,
-} from "./tracker-data-sidebar.constants";
+} from "../../world-state/lib/tracker-state-display";
+import { parseCharacterDisplayData } from "../../../shared/lib/character-display";
+import { cn } from "../../../shared/lib/utils";
+import { TRACKER_FEATURED_CHARACTER_META_KEY } from "./tracker-data-sidebar.constants";
 import {
   getCharacterFeatureKey,
   getCharacterProfileColors,
@@ -31,7 +37,6 @@ import {
   normalizeMaybeJsonStringArray,
   normalizeSpriteExpressionMap,
   normalizeStringArray,
-  parseAgentSettings,
   parseMetadataRecord,
   type TrackerProfileColors,
 } from "./tracker-data-sidebar.helpers";
@@ -48,12 +53,20 @@ export function TrackerDataSidebar({ fillHeight = false }: { fillHeight?: boolea
   const activeChatId = useChatStore((s) => s.activeChatId);
   const streamingChatId = useChatStore((s) => s.streamingChatId);
   const isStreamingGlobal = useChatStore((s) => s.isStreaming);
-  const currentGameState = useGameStateStore((s) =>
-    activeChatId && s.current?.chatId === activeChatId ? s.current : null,
-  );
-  const gameStateRefreshing = useGameStateStore((s) => s.isRefreshing);
-  const setGameState = useGameStateStore((s) => s.setGameState);
-  const { patchField, patchPlayerStats, flushPatch } = useGameStatePatcher(activeChatId, "tracker-data-sidebar");
+  const {
+    gameState: currentGameState,
+    playerStats,
+    personaStats,
+    presentCharacters,
+    inventory,
+    quests,
+    customTrackerFields: customFields,
+    gameStateRefreshing,
+    isLoadingGameState,
+    patchField,
+    patchPlayerStats,
+    flushPatch,
+  } = useTrackerStateController(activeChatId, "tracker-data-sidebar");
   const trackerPanelSide = useUIStore((s) => s.trackerPanelSide);
   const trackerPanelCollapsedSections = useUIStore((s) => s.trackerPanelCollapsedSections);
   const trackerPanelSectionOrder = useUIStore((s) => s.trackerPanelSectionOrder);
@@ -64,9 +77,7 @@ export function TrackerDataSidebar({ fillHeight = false }: { fillHeight?: boolea
   const isAgentProcessing = useAgentStore((s) => s.isProcessing);
   const { data: chat } = useChat(activeChatId);
   const updateChatMetadata = useUpdateChatMetadata();
-  const updateAgent = useUpdateAgent();
   const { retryAgents } = useGenerate();
-  const [loadingGameState, setLoadingGameState] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
   const [addMode, setAddMode] = useState(false);
   const [featuredCharacterCards, setFeaturedCharacterCards] = useState<Set<string>>(() => new Set());
@@ -74,39 +85,7 @@ export function TrackerDataSidebar({ fillHeight = false }: { fillHeight?: boolea
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const featuredCharacterCardsRef = useRef<Set<string>>(new Set());
   const isStreaming = isStreamingGlobal && streamingChatId === activeChatId;
-  const isLoadingGameState = loadingGameState || gameStateRefreshing;
   const trackerRetryBusy = isAgentProcessing || isStreaming || gameStateRefreshing;
-
-  useEffect(() => {
-    if (!activeChatId) {
-      setLoadingGameState(false);
-      return;
-    }
-
-    const existing = useGameStateStore.getState().current;
-    if (existing?.chatId === activeChatId) {
-      setLoadingGameState(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoadingGameState(true);
-    worldStateApi
-      .get(activeChatId)
-      .then((state) => {
-        if (!cancelled) setGameState(state ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setGameState(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingGameState(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeChatId, setGameState]);
 
   const chatMeta = useMemo(() => {
     const raw = (chat as unknown as { metadata?: string | Record<string, unknown> } | undefined)?.metadata;
@@ -148,18 +127,24 @@ export function TrackerDataSidebar({ fillHeight = false }: { fillHeight?: boolea
   const personaDataLookupEnabled = !!activeChatId && personaTrackerEnabled;
   const agentConfigLookupEnabled = !!activeChatId && characterTrackerEnabled;
   const { data: messageData } = useChatMessages(activeChatId, 20, spriteExpressionLookupEnabled);
-  const { data: agentConfigs } = useAgentConfigs(agentConfigLookupEnabled);
   const { data: charactersData } = useCharacters(characterDataLookupEnabled);
   const { data: personasData } = usePersonas(personaDataLookupEnabled);
-  const characterTrackerConfig = useMemo(() => {
-    if (!Array.isArray(agentConfigs)) return null;
-    return (agentConfigs as AgentConfigRow[]).find((agent) => agent.type === "character-tracker") ?? null;
-  }, [agentConfigs]);
-  const characterTrackerSettings = useMemo(
-    () => parseAgentSettings(characterTrackerConfig?.settings),
-    [characterTrackerConfig],
+  const updatePresentCharacters = useCallback(
+    (characters: PresentCharacter[]) => patchField("presentCharacters", characters),
+    [patchField],
   );
-  const autoGenerateCharacterAvatars = characterTrackerSettings.autoGenerateAvatars === true;
+  const {
+    autoGenerateCharacterAvatars,
+    canToggleAutoGenerateCharacterAvatars,
+    isUpdatingAutoGenerateCharacterAvatars,
+    toggleAutoGenerateCharacterAvatars,
+    uploadCharacterAvatar,
+  } = useTrackerCharacterAvatarActions({
+    chatId: activeChatId,
+    characters: presentCharacters,
+    onUpdateCharacters: updatePresentCharacters,
+    agentConfigLookupEnabled,
+  });
   const characterSpriteLookup = useMemo(() => {
     const rows = (
       Array.isArray(charactersData)
@@ -223,12 +208,6 @@ export function TrackerDataSidebar({ fillHeight = false }: { fillHeight?: boolea
   }, [chat, personas]);
   const expressionSpritesEnabled = trackerPanelUseExpressionSprites && expressionAgentEnabled;
 
-  const playerStats = currentGameState?.playerStats ?? null;
-  const personaStats = currentGameState?.personaStats ?? [];
-  const presentCharacters = currentGameState?.presentCharacters ?? [];
-  const inventory = playerStats?.inventory ?? [];
-  const quests = playerStats?.activeQuests ?? [];
-  const customFields = playerStats?.customTrackerFields ?? [];
   const isPanelCollapsed = (section: TrackerPanelSection) => trackerPanelCollapsedSections[section] === true;
   const hasFixedTrackerPanel = orderedTrackerSections.length > 0;
   const showTrackerSections = !!activeChatId && !isLoadingGameState && !!currentGameState && hasFixedTrackerPanel;
@@ -256,55 +235,16 @@ export function TrackerDataSidebar({ fillHeight = false }: { fillHeight?: boolea
     },
     [persistFeaturedCharacterCards],
   );
-  const toggleAutoGenerateCharacterAvatars = useCallback(() => {
-    if (!characterTrackerConfig) return;
-    const nextSettings = { ...characterTrackerSettings };
-    if (autoGenerateCharacterAvatars) {
-      delete nextSettings.autoGenerateAvatars;
-    } else {
-      nextSettings.autoGenerateAvatars = true;
-    }
-    updateAgent.mutate({ id: characterTrackerConfig.id, settings: nextSettings });
-  }, [autoGenerateCharacterAvatars, characterTrackerConfig, characterTrackerSettings, updateAgent]);
-
   const openAvatarUpload = useCallback((index: number) => {
     setAvatarUploadIndex(index);
     avatarFileInputRef.current?.click();
   }, []);
   const handleAvatarUpload = useCallback(
-    (index: number, file: File) => {
-      if (!activeChatId) return;
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const currentState = useGameStateStore.getState().current;
-        const currentCharacters = currentState?.chatId === activeChatId ? (currentState.presentCharacters ?? []) : [];
-        const character = currentCharacters[index];
-        const dataUrl = typeof reader.result === "string" ? reader.result : "";
-        if (!character || !dataUrl) return;
-        const targetCharacterId = character.characterId;
-
-        try {
-          const response = await npcAvatarApi.upload(activeChatId, character.name, dataUrl);
-          const latestState = useGameStateStore.getState().current;
-          const latestCharacters = latestState?.chatId === activeChatId ? (latestState.presentCharacters ?? []) : [];
-          const targetIndex = latestCharacters.findIndex((candidate) => candidate.characterId === targetCharacterId);
-          if (targetIndex < 0) return;
-
-          const nextCharacters = [...latestCharacters];
-          nextCharacters[targetIndex] = { ...latestCharacters[targetIndex]!, avatarPath: response.avatarPath };
-          patchField("presentCharacters", nextCharacters);
-        } catch {
-          // Match the original HUD widget behavior: failed avatar uploads leave tracker data unchanged.
-        }
-      };
-      reader.readAsDataURL(file);
-    },
-    [activeChatId, patchField],
+    (index: number, file: File) => void uploadCharacterAvatar(index, file),
+    [uploadCharacterAvatar],
   );
   const updateCharacter = (index: number, character: PresentCharacter) => {
-    const next = [...presentCharacters];
-    next[index] = character;
-    patchField("presentCharacters", next);
+    updatePresentCharacters(replaceTrackerListItem(presentCharacters, index, character));
   };
   const removeCharacter = (index: number) => {
     const removed = presentCharacters[index];
@@ -316,59 +256,30 @@ export function TrackerDataSidebar({ fillHeight = false }: { fillHeight?: boolea
         persistFeaturedCharacterCards(nextFeatured);
       }
     }
-    patchField(
-      "presentCharacters",
-      presentCharacters.filter((_, characterIndex) => characterIndex !== index),
-    );
+    updatePresentCharacters(removeTrackerListItem(presentCharacters, index));
   };
   const addCharacter = () => {
-    patchField("presentCharacters", [
-      ...presentCharacters,
-      {
-        characterId: `manual-${Date.now()}`,
-        name: "New Character",
-        emoji: "?",
-        mood: "",
-        appearance: null,
-        outfit: null,
-        customFields: {},
-        stats: [],
-        thoughts: null,
-      },
-    ]);
+    updatePresentCharacters(appendTrackerListItem(presentCharacters, createManualPresentCharacter()));
   };
   const updateInventory = (items: InventoryItem[]) => patchPlayerStats("inventory", items);
   const updateInventoryItem = (index: number, item: InventoryItem) => {
-    const next = [...inventory];
-    next[index] = item;
-    updateInventory(next);
+    updateInventory(replaceTrackerListItem(inventory, index, item));
   };
   const removeInventoryItem = (index: number) => {
-    updateInventory(inventory.filter((_, itemIndex) => itemIndex !== index));
+    updateInventory(removeTrackerListItem(inventory, index));
   };
   const addInventoryItem = () => {
-    updateInventory([...inventory, { name: "New Item", description: "", quantity: 1, location: "on_person" }]);
+    updateInventory(appendTrackerListItem(inventory, createManualInventoryItem()));
   };
   const updateQuests = (nextQuests: QuestProgress[]) => patchPlayerStats("activeQuests", nextQuests);
   const updateQuest = (index: number, quest: QuestProgress) => {
-    const next = [...quests];
-    next[index] = quest;
-    updateQuests(next);
+    updateQuests(replaceTrackerListItem(quests, index, quest));
   };
   const removeQuest = (index: number) => {
-    updateQuests(quests.filter((_, questIndex) => questIndex !== index));
+    updateQuests(removeTrackerListItem(quests, index));
   };
   const addQuest = () => {
-    updateQuests([
-      ...quests,
-      {
-        questEntryId: `manual-${Date.now()}`,
-        name: "New Quest",
-        currentStage: 0,
-        objectives: [{ text: "Objective 1", completed: false }],
-        completed: false,
-      },
-    ]);
+    updateQuests(appendTrackerListItem(quests, createManualQuest()));
   };
   const rerunTracker = useCallback(
     async (agentType: string) => {
@@ -407,10 +318,10 @@ export function TrackerDataSidebar({ fillHeight = false }: { fillHeight?: boolea
       : "Auto-generate character avatars: OFF";
     return (
       <>
-        {characterTrackerConfig && (
+        {canToggleAutoGenerateCharacterAvatars && (
           <SectionIconButton
             onClick={toggleAutoGenerateCharacterAvatars}
-            disabled={updateAgent.isPending}
+            disabled={isUpdatingAutoGenerateCharacterAvatars}
             title={autoAvatarTitle}
             pressed={autoGenerateCharacterAvatars}
             tone="feature"
@@ -454,10 +365,7 @@ export function TrackerDataSidebar({ fillHeight = false }: { fillHeight?: boolea
             onSaveStatus={(status) => patchPlayerStats("status", status)}
             onUpdatePersonaStats={(stats) => patchField("personaStats", stats)}
             onAddPersonaStat={() =>
-              patchField("personaStats", [
-                ...personaStats,
-                { name: "New Stat", value: 0, max: 100, color: "var(--primary)" },
-              ])
+              patchField("personaStats", appendTrackerListItem(personaStats, createManualCharacterStat()))
             }
             onAddInventoryItem={addInventoryItem}
             onUpdateInventoryItem={updateInventoryItem}

@@ -23,17 +23,23 @@ function createEmptyWorldState(chatId: string): WorldState {
   };
 }
 
+function throwIfAborted(init?: RequestInit) {
+  if (init?.signal?.aborted) throw new DOMException("The operation was aborted.", "AbortError");
+}
+
 export const worldStateApi = {
   get: async (chatId: string, init?: RequestInit) => {
-    if (init?.signal?.aborted) throw new DOMException("The operation was aborted.", "AbortError");
+    throwIfAborted(init);
     const chat = await storageApi.get<{ gameState?: WorldState }>("chats", chatId);
     return chat?.gameState ?? null;
   },
   patch: async (chatId: string, patch: WorldStatePatch, init?: RequestInit) => {
-    if (init?.signal?.aborted) throw new DOMException("The operation was aborted.", "AbortError");
+    throwIfAborted(init);
     const chat = await storageApi.get<{ gameState?: WorldState }>("chats", chatId);
+    throwIfAborted(init);
     const existing = chat?.gameState ?? createEmptyWorldState(chatId);
     const next = { ...existing, chatId, ...patch } as unknown as WorldState;
+    throwIfAborted(init);
     await storageApi.update("chats", chatId, { gameState: next });
     return next;
   },

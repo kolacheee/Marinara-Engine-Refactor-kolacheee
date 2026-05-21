@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Clock, MapPin } from "lucide-react";
 import type { GameState } from "../../../engine/contracts/types/game-state";
-import type { GameStatePatchField } from "../../world-state/hooks/use-world-state-patcher";
+import type { GameStatePatchField } from "../../world-state/types";
 import { cn } from "../../../shared/lib/utils";
 import { WORLD_GRID_BASE_CLASS } from "./tracker-data-sidebar.helpers";
 import {

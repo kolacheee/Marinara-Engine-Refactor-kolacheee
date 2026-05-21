@@ -3,6 +3,10 @@ import { Eye, HeartPulse, ImagePlus, Maximize2, MessageCircle, Shirt, X } from "
 import type { PresentCharacter } from "../../../engine/contracts/types/game-state";
 import type { TrackerPanelSide } from "../../../shared/stores/ui.store";
 import { cn } from "../../../shared/lib/utils";
+import {
+  addPresentCharacterStat,
+  updatePresentCharacterCustomField,
+} from "../../world-state/lib/tracker-state-edits";
 import { getCharacterAmbienceStyle, visibleText, type TrackerProfileColors } from "./tracker-data-sidebar.helpers";
 import {
   FittedText,
@@ -156,21 +160,12 @@ export function CharacterTrackerCard({
   const avatarSize = hasDenseContent ? "w-[clamp(2rem,24%,2.625rem)]" : "w-[clamp(2.25rem,30%,3rem)]";
   const updateCustomField = (oldName: string, nextName: string, nextValue: string) => {
     if (!onUpdate) return;
-    const nextFields = { ...(character.customFields ?? {}) };
-    const trimmedName = nextName.trim();
-    if (trimmedName && trimmedName !== oldName && Object.prototype.hasOwnProperty.call(nextFields, trimmedName)) {
-      return;
-    }
-    delete nextFields[oldName];
-    if (trimmedName) nextFields[trimmedName] = nextValue;
-    onUpdate({ ...character, customFields: nextFields });
+    const nextCharacter = updatePresentCharacterCustomField(character, oldName, nextName, nextValue);
+    if (nextCharacter) onUpdate(nextCharacter);
   };
   const addCharacterStat = () => {
     if (!onUpdate) return;
-    onUpdate({
-      ...character,
-      stats: [...characterStats, { name: "New Stat", value: 0, max: 100, color: "var(--primary)" }],
-    });
+    onUpdate(addPresentCharacterStat(character));
   };
   return (
     <article

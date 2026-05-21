@@ -2,6 +2,12 @@ import type { ReactNode } from "react";
 import { CheckCircle2, Circle, Plus, Target, X } from "lucide-react";
 import type { QuestProgress } from "../../../engine/contracts/types/game-state";
 import { cn } from "../../../shared/lib/utils";
+import {
+  addQuestObjective,
+  removeQuestObjective,
+  toggleQuestObjectiveCompletion,
+  updateQuestObjectiveText,
+} from "../../world-state/lib/tracker-state-edits";
 import { TRACKER_BAR, TRACKER_TEXT_ROW } from "./tracker-data-sidebar.constants";
 import { visibleText } from "./tracker-data-sidebar.helpers";
 import { AddRowButton, InlineEdit, SectionHeader, TrackerReadabilityVeil } from "./tracker-data-sidebar.controls";
@@ -133,23 +139,19 @@ function QuestRow({
   const questTitle = visibleText(quest.name, "Quest");
   const updateObjective = (index: number, nextText: string) => {
     if (!onUpdate) return;
-    const nextObjectives = [...quest.objectives];
-    nextObjectives[index] = { ...nextObjectives[index]!, text: nextText };
-    onUpdate({ ...quest, objectives: nextObjectives });
+    onUpdate(updateQuestObjectiveText(quest, index, nextText));
   };
   const toggleObjective = (index: number) => {
     if (!onUpdate) return;
-    const nextObjectives = [...quest.objectives];
-    nextObjectives[index] = { ...nextObjectives[index]!, completed: !nextObjectives[index]!.completed };
-    onUpdate({ ...quest, objectives: nextObjectives });
+    onUpdate(toggleQuestObjectiveCompletion(quest, index));
   };
   const removeObjective = (index: number) => {
     if (!onUpdate) return;
-    onUpdate({ ...quest, objectives: quest.objectives.filter((_, objectiveIndex) => objectiveIndex !== index) });
+    onUpdate(removeQuestObjective(quest, index));
   };
   const addObjective = () => {
     if (!onUpdate) return;
-    onUpdate({ ...quest, objectives: [...quest.objectives, { text: "New objective", completed: false }] });
+    onUpdate(addQuestObjective(quest));
   };
   return (
     <article

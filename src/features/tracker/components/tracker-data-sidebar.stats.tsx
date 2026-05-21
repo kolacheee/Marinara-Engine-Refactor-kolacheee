@@ -1,13 +1,15 @@
 import { X } from "lucide-react";
 import type { CharacterStat } from "../../../engine/contracts/types/game-state";
 import { cn } from "../../../shared/lib/utils";
+import { removeTrackerListItem, replaceTrackerListItem } from "../../world-state/lib/tracker-state-edits";
+import { getTrackerStatPercent } from "../../world-state/lib/tracker-state-display";
 import {
   TRACKER_BAR,
   TRACKER_TEXT_ROW,
   type TrackerStatDensity,
   type TrackerStatDisplayScale,
 } from "./tracker-data-sidebar.constants";
-import { getStatPercent, getTrackerStatDisplayScale, visibleText } from "./tracker-data-sidebar.helpers";
+import { getTrackerStatDisplayScale, visibleText } from "./tracker-data-sidebar.helpers";
 import { EmptySection, FittedText, InlineAddRow, InlineEdit, InlineNumber } from "./tracker-data-sidebar.controls";
 
 function getStatNameFitNeed(name: string | null | undefined) {
@@ -43,7 +45,7 @@ function StatBar({
   displayScale?: TrackerStatDisplayScale;
   compactNameRhythm?: boolean;
 }) {
-  const percent = getStatPercent(stat);
+  const percent = getTrackerStatPercent(stat);
   const isCompact = density === "compact";
   const isTight = density === "tight";
   const isCondensed = isCompact || isTight;
@@ -235,13 +237,11 @@ export function StatList({
   }
   const updateStat = (index: number, updated: CharacterStat) => {
     if (!onUpdate) return;
-    const next = [...stats];
-    next[index] = updated;
-    onUpdate(next);
+    onUpdate(replaceTrackerListItem(stats, index, updated));
   };
   const removeStat = (index: number) => {
     if (!onUpdate) return;
-    onUpdate(stats.filter((_, statIndex) => statIndex !== index));
+    onUpdate(removeTrackerListItem(stats, index));
   };
   const displayScale = getTrackerStatDisplayScale(
     stats.length,

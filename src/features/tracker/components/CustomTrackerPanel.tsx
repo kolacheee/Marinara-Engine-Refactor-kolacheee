@@ -2,6 +2,12 @@ import type { ReactNode } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
 import type { CustomTrackerField } from "../../../engine/contracts/types/game-state";
 import { cn } from "../../../shared/lib/utils";
+import {
+  appendTrackerListItem,
+  createManualCustomTrackerField,
+  removeTrackerListItem,
+  replaceTrackerListItem,
+} from "../../world-state/lib/tracker-state-edits";
 import { visibleText } from "./tracker-data-sidebar.helpers";
 import {
   AddRowButton,
@@ -23,13 +29,11 @@ function CustomFieldList({
   if (fields.length === 0 && !onUpdate) return <EmptySection>No custom fields tracked.</EmptySection>;
   const updateField = (index: number, updated: CustomTrackerField) => {
     if (!onUpdate) return;
-    const next = [...fields];
-    next[index] = updated;
-    onUpdate(next);
+    onUpdate(replaceTrackerListItem(fields, index, updated));
   };
   const removeField = (index: number) => {
     if (!onUpdate) return;
-    onUpdate(fields.filter((_, fieldIndex) => fieldIndex !== index));
+    onUpdate(removeTrackerListItem(fields, index));
   };
   return (
     <div className="group/statbox relative">
@@ -132,7 +136,7 @@ export function CustomTrackerPanel({
             addMode ? (
               <AddRowButton
                 title="Add custom stat"
-                onClick={() => onUpdateFields([...fields, { name: "New Field", value: "" }])}
+                onClick={() => onUpdateFields(appendTrackerListItem(fields, createManualCustomTrackerField()))}
                 className="h-4 w-4 rounded-sm"
               />
             ) : undefined

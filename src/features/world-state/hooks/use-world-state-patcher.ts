@@ -1,19 +1,10 @@
 import { useCallback, useEffect } from "react";
 import type { GameState, PlayerStats } from "../../../engine/contracts/types/game-state";
+import type { GameStatePatchField, GameStatePatchValue } from "../types";
 import { worldStateApi } from "../api/world-state-api";
 import { useGameStateStore } from "../stores/world-state.store";
 
-export type GameStatePatchField =
-  | "date"
-  | "time"
-  | "location"
-  | "weather"
-  | "temperature"
-  | "presentCharacters"
-  | "playerStats"
-  | "personaStats";
-
-type GameStatePatch = Partial<Record<GameStatePatchField, unknown>>;
+type GameStatePatch = Partial<GameStatePatchValue>;
 type GameStatePatchTarget = {
   messageId?: string;
   swipeIndex?: number;
@@ -223,8 +214,12 @@ function reconcileVisibleGameState(chatId: string, payload: GameStatePatch & Gam
   } as GameState);
 }
 
-function queuePatch(chatId: string, field: GameStatePatchField, value: unknown) {
-  const target = getPatchTarget(getCurrentGameStateForChat(chatId));
+function queuePatch<K extends GameStatePatchField>(
+  chatId: string,
+  field: K,
+  value: GameStatePatchValue[K],
+  target = getPatchTarget(getCurrentGameStateForChat(chatId)),
+) {
   const key = getPatchKey(chatId, target);
   const existingDurable = durablePatches.get(key);
   const queued = pendingPatches.get(key) ?? {
@@ -324,13 +319,11 @@ export async function flushGameStatePatch(chatId?: string) {
     }
   }
 
-  const inFlightResults = await Promise.allSettled(
-    Array.from(inFlightPatches.values())
-      .filter((entry) => !chatId || entry.chatId === chatId)
-      .map((entry) => entry.promise),
-  );
-  for (const result of inFlightResults) {
-    if (result.status === "rejected") errors.push(result.reason);
+  const inFlightEntries = Array.from(inFlightPatches.values()).filter((entry) => !chatId || entry.chatId === chatId);
+  const inFlightResults = await Promise.allSettled(inFlightEntries.map((entry) => entry.promise));
+  for (let idx = 0; idx < inFlightResults.length; idx += 1) {
+    const result = inFlightResults[idx];
+    if (result.status === "rejected" && !inFlightEntries[idx]?.canceled) errors.push(result.reason);
   }
 
   if (errors.length > 0) {
@@ -338,7 +331,7 @@ export async function flushGameStatePatch(chatId?: string) {
   }
 }
 
-export function discardPendingGameStatePatch(chatId?: string) {
+export async function discardPendingGameStatePatch(chatId?: string) {
   const keys = new Set([
     ...Array.from(pendingPatches.entries())
       .filter(([, queued]) => !chatId || queued.chatId === chatId)
@@ -365,8 +358,11 @@ export function discardPendingGameStatePatch(chatId?: string) {
     if (!entry) continue;
     entry.canceled = true;
     entry.controller.abort();
-    inFlightPatches.delete(key);
   }
+  const inFlightSettles = inFlightKeys
+    .map((key) => inFlightPatches.get(key)?.promise)
+    .filter((promise): promise is Promise<void> => Boolean(promise));
+  await Promise.allSettled(inFlightSettles);
 }
 
 function flushGameStatePatchOnUnload() {
@@ -416,30 +412,34 @@ function retainBeforeUnloadFlush() {
   };
 }
 
-export function patchGameStateField(chatId: string, field: GameStatePatchField, value: unknown) {
+export function patchGameStateField<K extends GameStatePatchField>(
+  chatId: string,
+  field: K,
+  value: GameStatePatchValue[K],
+) {
   const store = useGameStateStore.getState();
   if (store.isRefreshing) return;
   const prev = getCurrentGameStateForChat(chatId);
+  const target = getPatchTarget(prev);
   const nextState = {
     ...(prev ?? createEmptyGameState(chatId)),
-    messageId: "",
-    swipeIndex: 0,
     [field]: value,
   } as GameState;
   store.setGameState(nextState);
-  queuePatch(chatId, field, value);
+  queuePatch(chatId, field, value, target);
 }
 
-export function patchPlayerStatsField(chatId: string, field: keyof PlayerStats, value: unknown) {
+export function patchPlayerStatsField<K extends keyof PlayerStats>(chatId: string, field: K, value: PlayerStats[K]) {
   const current = getCurrentGameStateForChat(chatId)?.playerStats ?? createEmptyPlayerStats();
-  patchGameStateField(chatId, "playerStats", { ...current, [field]: value });
+  const nextPlayerStats: PlayerStats = { ...current, [field]: value };
+  patchGameStateField(chatId, "playerStats", nextPlayerStats);
 }
 
 export function useGameStatePatcher(chatId: string | null, registrationId?: string) {
   const registerFlushPatch = useGameStateStore((s) => s.registerFlushPatch);
 
   const patchField = useCallback(
-    (field: GameStatePatchField, value: unknown) => {
+    <K extends GameStatePatchField>(field: K, value: GameStatePatchValue[K]) => {
       if (!chatId) return;
       patchGameStateField(chatId, field, value);
     },
@@ -447,7 +447,7 @@ export function useGameStatePatcher(chatId: string | null, registrationId?: stri
   );
 
   const patchPlayerStats = useCallback(
-    (field: keyof PlayerStats, value: unknown) => {
+    <K extends keyof PlayerStats>(field: K, value: PlayerStats[K]) => {
       if (!chatId) return;
       patchPlayerStatsField(chatId, field, value);
     },

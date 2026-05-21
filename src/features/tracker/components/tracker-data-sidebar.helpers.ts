@@ -1,7 +1,17 @@
 import type { CSSProperties } from "react";
-import type { CharacterStat, GameState, PresentCharacter } from "../../../engine/contracts/types/game-state";
+import type { GameState, PresentCharacter } from "../../../engine/contracts/types/game-state";
 import type { Persona, TrackerCardColorConfig } from "../../../engine/contracts/types/persona";
 import type { SpriteInfo } from "../../characters/hooks/use-characters";
+import {
+  getLocationPinColor,
+  getTemperatureColor,
+  getTemperatureGaugeDisplay,
+  getTemperatureKeywordHint,
+  getWeatherEmoji,
+  getWorldDateDisplay,
+  getWorldTimeDisplay,
+  parseTemperatureValue,
+} from "../../world-state/lib/world-state-display";
 import {
   DEFAULT_TRACKER_CARD_ACCENT,
   getTrackerCardCssPaintValue,
@@ -25,6 +35,17 @@ import {
   type TrackerStatDensity,
   type TrackerStatDisplayScale,
 } from "./tracker-data-sidebar.constants";
+
+export {
+  getLocationPinColor,
+  getTemperatureColor,
+  getTemperatureGaugeDisplay,
+  getTemperatureKeywordHint,
+  getWeatherEmoji,
+  getWorldDateDisplay,
+  getWorldTimeDisplay,
+  parseTemperatureValue,
+};
 
 export function trackerStatStackHeight(statCount: number, density: TrackerStatDensity, includeAdd: boolean) {
   return (
@@ -112,161 +133,6 @@ export function getNumberValueWidth(value: number) {
   return `${Math.min(7, Math.max(1.15, text.length + 0.35))}ch`;
 }
 
-export const WORLD_MONTH_LABELS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-export const WORLD_MONTH_ALIASES: Record<string, number> = {
-  jan: 0,
-  january: 0,
-  feb: 1,
-  february: 1,
-  mar: 2,
-  march: 2,
-  apr: 3,
-  april: 3,
-  may: 4,
-  jun: 5,
-  june: 5,
-  jul: 6,
-  july: 6,
-  aug: 7,
-  august: 7,
-  sep: 8,
-  sept: 8,
-  september: 8,
-  oct: 9,
-  october: 9,
-  nov: 10,
-  november: 10,
-  dec: 11,
-  december: 11,
-};
-
-export function getWorldDateDisplay(date: string | null | undefined) {
-  const text = (date ?? "").trim();
-  if (!text) return { month: "DATE", day: "--", year: "", raw: "" };
-
-  const isoMatch = text.match(/\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
-  if (isoMatch) {
-    const monthIndex = Number(isoMatch[2]) - 1;
-    return {
-      month: WORLD_MONTH_LABELS[monthIndex] ?? "DATE",
-      day: String(Number(isoMatch[3])).padStart(2, "0"),
-      year: isoMatch[1]!,
-      raw: text,
-    };
-  }
-
-  const numericDate = text.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/);
-  if (numericDate) {
-    const first = Number(numericDate[1]);
-    const second = Number(numericDate[2]);
-    const day = first > 12 ? first : second;
-    const monthIndex = (first > 12 ? second : first) - 1;
-    return {
-      month: WORLD_MONTH_LABELS[monthIndex] ?? "DATE",
-      day: String(day).padStart(2, "0"),
-      year: numericDate[3]!,
-      raw: text,
-    };
-  }
-
-  const namedMonthFirst = text.match(
-    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{2,4}))?\b/i,
-  );
-  if (namedMonthFirst) {
-    const monthIndex = WORLD_MONTH_ALIASES[namedMonthFirst[1]!.toLowerCase()];
-    return {
-      month: monthIndex === undefined ? "DATE" : (WORLD_MONTH_LABELS[monthIndex] ?? "DATE"),
-      day: String(Number(namedMonthFirst[2])).padStart(2, "0"),
-      year: namedMonthFirst[3] ?? "",
-      raw: text,
-    };
-  }
-
-  const dayFirst = text.match(
-    /\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\.|,)?(?:\s+(\d{2,4}))?\b/i,
-  );
-  if (dayFirst) {
-    const monthIndex = WORLD_MONTH_ALIASES[dayFirst[2]!.toLowerCase()];
-    return {
-      month: monthIndex === undefined ? "DATE" : (WORLD_MONTH_LABELS[monthIndex] ?? "DATE"),
-      day: String(Number(dayFirst[1])).padStart(2, "0"),
-      year: dayFirst[3] ?? "",
-      raw: text,
-    };
-  }
-
-  const firstNumber = text.match(/\b(\d{1,2})(?:st|nd|rd|th)?\b/);
-  return {
-    month: "DATE",
-    day: firstNumber ? String(Number(firstNumber[1])).padStart(2, "0") : text.slice(0, 3).toUpperCase(),
-    year: "",
-    raw: text,
-  };
-}
-
-export function getWorldTimeDisplay(time: string | null | undefined) {
-  const text = (time ?? "").trim();
-  if (!text) return { main: "--:--", suffix: "", raw: "", hour: null, minute: null };
-
-  const twentyFourHour = text.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/);
-  if (twentyFourHour) {
-    const hour = Number(twentyFourHour[1]);
-    const minute = Number(twentyFourHour[2]);
-    return {
-      main: `${twentyFourHour[1]!.padStart(2, "0")}:${twentyFourHour[2]}`,
-      suffix: "",
-      hour,
-      minute,
-      raw: text,
-    };
-  }
-
-  const meridiem = text.match(/\b(1[0-2]|0?\d)(?::([0-5]\d))?\s*([ap])\.?m?\.?\b/i);
-  if (meridiem) {
-    const displayHour = Number(meridiem[1]);
-    const minute = Number(meridiem[2] ?? "00");
-    const marker = meridiem[3]!.toLowerCase();
-    const hour = marker === "p" ? (displayHour % 12) + 12 : displayHour % 12;
-    return {
-      main: `${meridiem[1]!.padStart(2, "0")}:${meridiem[2] ?? "00"}`,
-      suffix: `${meridiem[3]!.toUpperCase()}M`,
-      hour,
-      minute,
-      raw: text,
-    };
-  }
-
-  return { main: text, suffix: "", raw: text, hour: null, minute: null };
-}
-
-export function getStatPercent(stat: CharacterStat) {
-  if (!Number.isFinite(stat.max) || stat.max <= 0) return 0;
-  return Math.max(0, Math.min(100, (stat.value / stat.max) * 100));
-}
-
-export function getWeatherEmoji(weather: string | null | undefined) {
-  const text = (weather ?? "").toLowerCase();
-  if (text.includes("thunder") || text.includes("lightning")) return "⛈️";
-  if (text.includes("blizzard")) return "🌨️";
-  if (text.includes("heavy rain") || text.includes("downpour") || text.includes("storm")) return "🌧️";
-  if (text.includes("rain") || text.includes("drizzle") || text.includes("shower")) return "🌦️";
-  if (text.includes("hail")) return "🧊";
-  if (text.includes("snow") || text.includes("sleet") || text.includes("frost")) return "❄️";
-  if (text.includes("fog") || text.includes("mist") || text.includes("haze")) return "🌫️";
-  if (text.includes("sand") || text.includes("dust")) return "🏜️";
-  if (text.includes("ash") || text.includes("volcanic") || text.includes("smoke")) return "🌋";
-  if (text.includes("ember") || text.includes("fire") || text.includes("inferno")) return "🔥";
-  if (text.includes("wind") || text.includes("breez") || text.includes("gust")) return "💨";
-  if (text.includes("cherry") || text.includes("blossom") || text.includes("petal")) return "🌸";
-  if (text.includes("aurora") || text.includes("northern light")) return "🌌";
-  if (text.includes("cloud") || text.includes("overcast") || text.includes("grey") || text.includes("gray"))
-    return "☁️";
-  if (text.includes("clear") || text.includes("sunny") || text.includes("bright")) return "☀️";
-  if (text.includes("hot") || text.includes("swelter")) return "🥵";
-  if (text.includes("cold") || text.includes("freez")) return "🥶";
-  return "🌤️";
-}
-
 export function getForecastWeatherTextClass(weather: string | null | undefined) {
   const text = visibleText(weather, "Set weather");
   const normalized = text.replace(/\s+/g, " ").trim();
@@ -284,99 +150,6 @@ export function getForecastWeatherTextClass(weather: string | null | undefined) 
     return "text-[0.625rem] leading-[0.75rem] @min-[7rem]:text-[0.6875rem] @min-[7rem]:leading-[0.8125rem] @min-[10rem]:text-[0.8125rem] @min-[10rem]:leading-[0.925rem] @min-[14rem]:text-[0.9375rem] @min-[14rem]:leading-[1.05rem]";
   }
   return "text-[0.8125rem] leading-[0.9rem] @min-[7rem]:text-[0.9375rem] @min-[7rem]:leading-[1rem] @min-[10rem]:text-[1.0625rem] @min-[10rem]:leading-[1.1rem] @min-[14rem]:text-[1.1875rem] @min-[14rem]:leading-[1.2rem] @min-[18rem]:text-[1.25rem] @min-[18rem]:leading-[1.25rem]";
-}
-
-export function parseTemperatureValue(temperature: string | null | undefined) {
-  const match = (temperature ?? "").match(/-?\d+(\.\d+)?/);
-  if (!match) return null;
-  const numeric = parseFloat(match[0]!);
-  if (/°?\s*f/i.test(temperature ?? "")) return Math.round((numeric - 32) * (5 / 9));
-  return Math.round(numeric);
-}
-
-export function getTemperatureKeywordHint(temperature: string | null | undefined) {
-  const text = (temperature ?? "").toLowerCase();
-  if (/\b(freez|frigid|arctic|glacial|sub-?zero|blizzard)/.test(text)) return -10;
-  if (/\b(cold|chill|frost|wintry|icy|bitter|nipp)/.test(text)) return 2;
-  if (/\b(cool|brisk|crisp|refresh)/.test(text)) return 12;
-  if (/\b(mild|pleasant|comfort|temperate|fair)/.test(text)) return 20;
-  if (/\b(warm|balmy|toasty|muggy|humid|stuffy|sultry)/.test(text)) return 28;
-  if (/\b(hot|swelter|blaz|scorch|burn|heat|boil|sear|bak)/.test(text)) return 38;
-  return null;
-}
-
-export function getTemperatureColor(temperature: string | null | undefined) {
-  const parsed = parseTemperatureValue(temperature);
-  const value = parsed ?? getTemperatureKeywordHint(temperature);
-  if (value === null) return "text-rose-400/50";
-  if (value < 0) return "text-blue-400";
-  if (value < 15) return "text-sky-400";
-  if (value < 30) return "text-amber-400";
-  return "text-red-400";
-}
-
-export function getTemperatureGaugeDisplay(temperature: string | null | undefined) {
-  const parsed = parseTemperatureValue(temperature);
-  const hinted = getTemperatureKeywordHint(temperature);
-  const value = parsed ?? hinted;
-  const percent =
-    value === null ? 42 : Math.max(8, Math.min(96, Math.round(((Math.max(-12, Math.min(42, value)) + 12) / 54) * 100)));
-  const color =
-    value === null
-      ? "color-mix(in srgb, var(--primary) 42%, var(--muted-foreground) 28%)"
-      : value < 0
-        ? "rgb(96 165 250)"
-        : value < 15
-          ? "rgb(56 189 248)"
-          : value < 30
-            ? "rgb(163 230 53)"
-            : "rgb(248 113 113)";
-
-  return {
-    color,
-    label: parsed !== null ? `${parsed}°C` : visibleText(temperature, "--"),
-    percent,
-  };
-}
-
-export function getLocationPinColor(location: string | null | undefined) {
-  const text = (location ?? "").toLowerCase();
-  if (
-    /\b(sea|ocean|lake|river|pond|creek|bay|shore|beach|harbor|harbour|port|coast|marsh|swamp|waterfall|spring|well|dock|canal|dam|reef|lagoon|estuary|fjord|cove)\b/.test(
-      text,
-    )
-  ) {
-    return "text-blue-400";
-  }
-  if (
-    /\b(mountain|hill|cliff|peak|ridge|canyon|gorge|cave|cavern|mine|quarry|summit|bluff|crag|volcano|crater|mesa|plateau|ravine|boulder)\b/.test(
-      text,
-    )
-  ) {
-    return "text-amber-700";
-  }
-  if (
-    /\b(city|town|village|castle|palace|fortress|market|shop|inn|tavern|bar|pub|guild|district|quarter|bazaar|temple|church|cathedral|shrine|tower|gate|square|plaza|street|alley|arena|throne|court|capitol|capital|metro|subway)\b/.test(
-      text,
-    )
-  ) {
-    return "text-purple-400";
-  }
-  if (
-    /\b(room|hall|chamber|dungeon|cellar|basement|attic|library|study|bedroom|kitchen|office|lab|laboratory|vault|corridor|passage|cabin|hut|tent|interior|house|home|building|apartment|manor|lodge|dormitor|warehouse|prison|cell|jail)\b/.test(
-      text,
-    )
-  ) {
-    return "text-amber-300";
-  }
-  if (
-    /\b(forest|wood|grove|jungle|garden|park|field|meadow|glade|clearing|plain|prairie|steppe|savanna|farm|ranch|orchard|vineyard|glen|vale|valley|thicket|copse|heath|moor|desert|tundra|waste|wild|trail|path|road)\b/.test(
-      text,
-    )
-  ) {
-    return "text-emerald-400";
-  }
-  return "text-emerald-400";
 }
 
 export function getWorldAmbienceStyle(state: GameState | null): CSSProperties {
@@ -727,19 +500,6 @@ export function parseMetadataRecord(raw: unknown): Record<string, unknown> {
     }
   }
   return typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-}
-
-export function parseAgentSettings(settings: unknown): Record<string, unknown> {
-  if (!settings) return {};
-  if (typeof settings === "string") {
-    try {
-      const parsed = JSON.parse(settings);
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      return {};
-    }
-  }
-  return typeof settings === "object" && !Array.isArray(settings) ? (settings as Record<string, unknown>) : {};
 }
 
 export function normalizeStringArray(value: unknown): string[] {
