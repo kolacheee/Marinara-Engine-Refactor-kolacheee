@@ -178,6 +178,14 @@ function questObjectiveKey(item: QuestObjective | undefined) {
   return item?.text?.trim() || null;
 }
 
+export function makeManualTrackerId() {
+  const id =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+  return `manual-${id}`;
+}
+
 export function mergeNamedTrackerListUpdate<T extends NamedTrackerItem & object>(
   previousItems: readonly T[],
   latestItems: readonly T[],
@@ -344,7 +352,7 @@ export function removeQuestProgressListItem(
 
 export function createManualPresentCharacter(options: Partial<PresentCharacter> = {}): PresentCharacter {
   return {
-    characterId: options.characterId ?? `manual-${Date.now()}`,
+    characterId: options.characterId ?? makeManualTrackerId(),
     name: options.name ?? "New Character",
     emoji: options.emoji ?? "?",
     mood: options.mood ?? "",
@@ -378,7 +386,7 @@ export function createManualQuestObjective(options: Partial<QuestProgress["objec
 
 export function createManualQuest(options: Partial<QuestProgress> = {}): QuestProgress {
   return {
-    questEntryId: options.questEntryId ?? `manual-${Date.now()}`,
+    questEntryId: options.questEntryId ?? makeManualTrackerId(),
     name: options.name ?? "New Quest",
     currentStage: options.currentStage ?? 0,
     objectives: options.objectives ?? [createManualQuestObjective({ text: "Objective 1" })],
