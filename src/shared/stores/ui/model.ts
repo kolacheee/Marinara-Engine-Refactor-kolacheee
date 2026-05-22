@@ -1,4 +1,6 @@
 // UI store types, constants, and pure helpers.
+import { TEMPERATURE_UNITS, normalizeTemperatureUnit, type TemperatureUnit } from "../../lib/temperature-units";
+
 export type Panel =
   | "chat"
   | "characters"
@@ -13,6 +15,11 @@ export type FontSize = 12 | 14 | 16 | 17 | 19 | 22;
 export type VisualTheme = "default" | "sillytavern";
 export type HudPosition = "top" | "left" | "right";
 export type TrackerPanelSide = "left" | "right";
+export type TrackerThoughtBubbleDisplay = "inline" | "floating";
+export const TRACKER_TEMPERATURE_UNITS = TEMPERATURE_UNITS;
+export type TrackerTemperatureUnit = TemperatureUnit;
+export const TRACKER_PANEL_SIZE_PROFILES = ["compact", "standard", "expanded"] as const;
+export type TrackerPanelSizeProfile = (typeof TRACKER_PANEL_SIZE_PROFILES)[number];
 export type TrackerDataPanelSection = "world" | "persona" | "characters" | "quests" | "custom";
 export type TrackerPanelCollapsedSections = Partial<Record<TrackerDataPanelSection, boolean>>;
 export type TrackerPanelSectionOrder = TrackerDataPanelSection[];
@@ -44,9 +51,14 @@ export const SIDEBAR_WIDTH_MIN = 240;
 export const SIDEBAR_WIDTH_MAX = 480;
 export const RIGHT_PANEL_WIDTH_MIN = 280;
 export const RIGHT_PANEL_WIDTH_MAX = 520;
-export const TRACKER_PANEL_WIDTH_DEFAULT = 288;
-export const TRACKER_PANEL_WIDTH_MIN = 220;
-export const TRACKER_PANEL_WIDTH_MAX = 440;
+export const TRACKER_PANEL_SIZE_PROFILE_WIDTHS: Record<TrackerPanelSizeProfile, number> = {
+  compact: 280,
+  standard: 340,
+  expanded: 420,
+};
+export const TRACKER_PANEL_WIDTH_DEFAULT = TRACKER_PANEL_SIZE_PROFILE_WIDTHS.standard;
+export const TRACKER_PANEL_WIDTH_MIN = TRACKER_PANEL_SIZE_PROFILE_WIDTHS.compact;
+export const TRACKER_PANEL_WIDTH_MAX = TRACKER_PANEL_SIZE_PROFILE_WIDTHS.expanded;
 export const IMAGE_DIMENSION_MIN = 64;
 export const IMAGE_DIMENSION_MAX = 4096;
 export const GAME_SETUP_LEARNED_LIMIT = 60;
@@ -83,6 +95,32 @@ export function clampImageDimension(value: number) {
 export function clampTrackerPanelWidth(value: unknown) {
   const width = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : TRACKER_PANEL_WIDTH_DEFAULT;
   return Math.max(TRACKER_PANEL_WIDTH_MIN, Math.min(TRACKER_PANEL_WIDTH_MAX, width));
+}
+
+export function getTrackerPanelWidthForProfile(profile: TrackerPanelSizeProfile) {
+  return TRACKER_PANEL_SIZE_PROFILE_WIDTHS[profile] ?? TRACKER_PANEL_SIZE_PROFILE_WIDTHS.standard;
+}
+
+export function normalizeTrackerPanelSizeProfile(value: unknown, legacyWidth?: unknown): TrackerPanelSizeProfile {
+  if (TRACKER_PANEL_SIZE_PROFILES.includes(value as TrackerPanelSizeProfile)) {
+    return value as TrackerPanelSizeProfile;
+  }
+
+  const width = typeof legacyWidth === "number" && Number.isFinite(legacyWidth) ? clampTrackerPanelWidth(legacyWidth) : null;
+  if (width !== null) {
+    if (width <= 300) return "compact";
+    if (width >= 380) return "expanded";
+  }
+
+  return "standard";
+}
+
+export function normalizeTrackerThoughtBubbleDisplay(value: unknown): TrackerThoughtBubbleDisplay {
+  return value === "inline" || value === "floating" ? value : "inline";
+}
+
+export function normalizeTrackerTemperatureUnit(value: unknown): TrackerTemperatureUnit {
+  return normalizeTemperatureUnit(value);
 }
 
 export function normalizeTrackerPanelCollapsedSections(value: unknown): TrackerPanelCollapsedSections {
@@ -195,7 +233,10 @@ export interface UIState {
   trackerPanelSide: TrackerPanelSide;
   trackerPanelHideHudWidgets: boolean;
   trackerPanelUseExpressionSprites: boolean;
-  trackerPanelWidth: number;
+  trackerPanelThoughtBubbleDisplay: TrackerThoughtBubbleDisplay;
+  trackerPanelDockedThoughtsAlwaysVisible: boolean;
+  trackerPanelSizeProfile: TrackerPanelSizeProfile;
+  trackerTemperatureUnit: TrackerTemperatureUnit;
   trackerPanelCollapsedSections: TrackerPanelCollapsedSections;
   trackerPanelSectionOrder: TrackerPanelSectionOrder;
   settingsTab: string;
@@ -402,7 +443,10 @@ export interface UIState {
   setTrackerPanelSide: (side: TrackerPanelSide) => void;
   setTrackerPanelHideHudWidgets: (hidden: boolean) => void;
   setTrackerPanelUseExpressionSprites: (enabled: boolean) => void;
-  setTrackerPanelWidth: (width: number) => void;
+  setTrackerPanelThoughtBubbleDisplay: (display: TrackerThoughtBubbleDisplay) => void;
+  setTrackerPanelDockedThoughtsAlwaysVisible: (visible: boolean) => void;
+  setTrackerPanelSizeProfile: (profile: TrackerPanelSizeProfile) => void;
+  setTrackerTemperatureUnit: (unit: TrackerTemperatureUnit) => void;
   setTrackerPanelSectionOrder: (order: TrackerPanelSectionOrder) => void;
   setTrackerPanelSectionCollapsed: (section: TrackerDataPanelSection, collapsed: boolean) => void;
   toggleTrackerPanelSectionCollapsed: (section: TrackerDataPanelSection) => void;

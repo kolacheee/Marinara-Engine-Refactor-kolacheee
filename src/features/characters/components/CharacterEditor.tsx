@@ -3129,7 +3129,6 @@ function ColorsTab({
         onChange={(value) => updateExtension("trackerCardColors", value)}
         chatColors={{ nameColor, dialogueColor, boxColor }}
         entityLabel="Character"
-        previewName={formData.name || "Character"}
       />
     </div>
   );

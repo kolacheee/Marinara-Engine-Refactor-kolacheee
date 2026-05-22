@@ -1,8 +1,18 @@
 import { createJSONStorage } from "zustand/middleware";
+import {
+  normalizeTrackerPanelSectionOrder,
+  normalizeTrackerPanelSizeProfile,
+  normalizeTrackerTemperatureUnit,
+  normalizeTrackerThoughtBubbleDisplay,
+} from "./model";
 import type { UIState } from "./model";
 
 export const UI_STORE_NAME = "marinara-engine-ui-tauri";
-export const UI_STORE_VERSION = 1;
+export const UI_STORE_VERSION = 2;
+
+type PersistedUiState = Partial<UIState> & {
+  trackerPanelWidth?: unknown;
+};
 
 export function createDebouncedUiStorage() {
   return createJSONStorage(() => {
@@ -52,7 +62,10 @@ export function partializeUiState(state: UIState) {
     trackerPanelSide: state.trackerPanelSide,
     trackerPanelHideHudWidgets: state.trackerPanelHideHudWidgets,
     trackerPanelUseExpressionSprites: state.trackerPanelUseExpressionSprites,
-    trackerPanelWidth: state.trackerPanelWidth,
+    trackerPanelThoughtBubbleDisplay: state.trackerPanelThoughtBubbleDisplay,
+    trackerPanelDockedThoughtsAlwaysVisible: state.trackerPanelDockedThoughtsAlwaysVisible,
+    trackerPanelSizeProfile: state.trackerPanelSizeProfile,
+    trackerTemperatureUnit: state.trackerTemperatureUnit,
     trackerPanelCollapsedSections: state.trackerPanelCollapsedSections,
     trackerPanelSectionOrder: state.trackerPanelSectionOrder,
     theme: state.theme,
@@ -135,4 +148,27 @@ export function partializeUiState(state: UIState) {
     learnedGameSetupOptions: state.learnedGameSetupOptions,
     rememberedGameSetupText: state.rememberedGameSetupText,
   };
+}
+
+export function migrateUiState(persistedState: unknown): Partial<UIState> {
+  const persisted =
+    typeof persistedState === "object" && persistedState !== null
+      ? { ...(persistedState as PersistedUiState) }
+      : {};
+
+  const legacyWidth = persisted.trackerPanelWidth;
+  persisted.trackerPanelThoughtBubbleDisplay = normalizeTrackerThoughtBubbleDisplay(
+    persisted.trackerPanelThoughtBubbleDisplay,
+  );
+  persisted.trackerPanelDockedThoughtsAlwaysVisible =
+    persisted.trackerPanelDockedThoughtsAlwaysVisible === true;
+  persisted.trackerPanelSizeProfile = normalizeTrackerPanelSizeProfile(
+    persisted.trackerPanelSizeProfile,
+    legacyWidth,
+  );
+  persisted.trackerTemperatureUnit = normalizeTrackerTemperatureUnit(persisted.trackerTemperatureUnit);
+  persisted.trackerPanelSectionOrder = normalizeTrackerPanelSectionOrder(persisted.trackerPanelSectionOrder);
+  delete persisted.trackerPanelWidth;
+
+  return persisted;
 }
