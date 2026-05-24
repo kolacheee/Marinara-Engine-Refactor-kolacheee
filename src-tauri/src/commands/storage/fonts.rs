@@ -185,25 +185,11 @@ async fn download_google_font(state: &AppState, body: Value) -> AppResult<Value>
         files.push(json!({
             "filename": filename,
             "family": family,
-            "url": format!("tauri-api:/fonts/file/{}", percent_encode_component(files.last().and_then(|_| Some("")).unwrap_or(""))),
+            "url": format!("tauri-api:/fonts/file/{}", percent_encode_component(&filename)),
             "weight": face.weight,
             "style": face.style,
             "unicodeRange": face.unicode_range
         }));
-        if let Some(object) = files.last_mut().and_then(Value::as_object_mut) {
-            let filename = object
-                .get("filename")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_string();
-            object.insert(
-                "url".to_string(),
-                Value::String(format!(
-                    "tauri-api:/fonts/file/{}",
-                    percent_encode_component(&filename)
-                )),
-            );
-        }
     }
     write_font_metadata(&root, &metadata)?;
     Ok(json!({

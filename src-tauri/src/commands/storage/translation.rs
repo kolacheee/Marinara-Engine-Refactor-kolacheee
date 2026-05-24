@@ -18,7 +18,8 @@ pub(crate) async fn translate_text(state: &AppState, body: Value) -> AppResult<V
         "ai" => translate_with_ai(state, text, target_language, &body).await?,
         "deeplx" => translate_with_deeplx(text, target_language, &body).await?,
         "deepl" => translate_with_deepl(text, target_language, &body).await?,
-        "google" | _ => translate_with_google(text, target_language).await?,
+        "google" => translate_with_google(text, target_language).await?,
+        _ => translate_with_google(text, target_language).await?,
     };
     Ok(json!({ "translatedText": translated }))
 }

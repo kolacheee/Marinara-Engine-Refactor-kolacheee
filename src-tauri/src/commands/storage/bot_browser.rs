@@ -847,11 +847,7 @@ fn find_asset_js(haystack: &str, prefix: &str) -> Option<String> {
     let rest = &haystack[start..];
     let end = rest.find(".js")? + ".js".len();
     let file = &rest[..end];
-    if haystack[..start].ends_with("/_astro/") {
-        Some(format!("/_astro/{file}"))
-    } else {
-        Some(format!("/_astro/{file}"))
-    }
+    Some(format!("/_astro/{file}"))
 }
 
 fn find_hex_token(haystack: &str) -> Option<String> {

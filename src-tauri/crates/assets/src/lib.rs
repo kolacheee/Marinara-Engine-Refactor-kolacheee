@@ -126,7 +126,7 @@ impl AssetService {
     pub fn write_text(&self, path: &str, content: &str) -> AppResult<()> {
         let path = self.absolute_path(path)?;
         ensure_text_asset_path(&path)?;
-        if content.as_bytes().len() > MAX_TEXT_ASSET_BYTES {
+        if content.len() > MAX_TEXT_ASSET_BYTES {
             return Err(AppError::invalid_input("Text asset is too large to write"));
         }
         if let Some(parent) = path.parent() {

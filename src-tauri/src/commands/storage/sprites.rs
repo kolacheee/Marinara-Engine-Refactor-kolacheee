@@ -123,9 +123,11 @@ pub(crate) async fn generate_sprite_sheet(state: &AppState, body: Value) -> AppR
     let connection = get_required(state, "connections", connection_id)?;
     let image_options = image_generation_options(&body);
     let plan = build_sprite_plan(&body, Some(&connection));
-    let reference_note = (!image_options.reference_images.is_empty())
-        .then_some(" Use the provided reference image(s) to preserve face, hair, body, outfit, colors, and distinctive features.")
-        .unwrap_or("");
+    let reference_note = if image_options.reference_images.is_empty() {
+        ""
+    } else {
+        " Use the provided reference image(s) to preserve face, hair, body, outfit, colors, and distinctive features."
+    };
 
     if plan.should_generate_individually() {
         let mut cells = Vec::new();
@@ -690,6 +692,7 @@ fn single_full_body_prompt(appearance: &str, pose: &str, body: &Value, model: &s
     transparent_prompt(format!("single full-body character sprite, one character only, entire body visible from head to toe, centered in frame, no cropping, solid white studio background, {appearance}, pose/action: {pose}, anime/game sprite style, consistent character design, no grid, no panel borders, no text, no labels, no watermark"), body, model)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn full_body_sheet_prompt(
     cols: u32,
     rows: u32,
@@ -731,6 +734,7 @@ fn full_body_sheet_prompt(
     .join(" ")
 }
 
+#[allow(clippy::too_many_arguments)]
 fn full_body_expression_sheet_prompt(
     cols: u32,
     rows: u32,
@@ -921,7 +925,7 @@ fn cleanup_image_bytes(
             });
         }
     }
-    let image = image::load_from_memory(&bytes).map_err(image_error)?;
+    let image = image::load_from_memory(bytes).map_err(image_error)?;
     Ok(SpriteCleanupOutput {
         bytes: encode_png(cleanup_image(image, strength))?,
         engine: "builtin".to_string(),
@@ -1042,10 +1046,10 @@ fn cleanup_image(image: DynamicImage, strength: u8) -> DynamicImage {
             if matte_mask[index] {
                 continue;
             }
-            if row_counts[y as usize] as f32 >= broad_row_threshold
-                || col_counts[x as usize] as f32 >= broad_col_threshold
-            {
-                if is_matte_candidate(
+            let is_broad_axis = row_counts[y as usize] as f32 >= broad_row_threshold
+                || col_counts[x as usize] as f32 >= broad_col_threshold;
+            if is_broad_axis
+                && is_matte_candidate(
                     &rgba,
                     x,
                     y,
@@ -1053,10 +1057,10 @@ fn cleanup_image(image: DynamicImage, strength: u8) -> DynamicImage {
                     strict_cutoff,
                     luma_floor + 10.0,
                     spread_limit - 8.0,
-                ) {
-                    matte_mask[index] = true;
-                    queue.push_back(index);
-                }
+                )
+            {
+                matte_mask[index] = true;
+                queue.push_back(index);
             }
         }
     }
@@ -1344,8 +1348,8 @@ fn foreground_neighbor_color(
     let mut blue = 0.0;
     let mut total = 0.0;
     for radius in 1..=4 {
-        for y_offset in -(radius as i32)..=(radius as i32) {
-            for x_offset in -(radius as i32)..=(radius as i32) {
+        for y_offset in -radius..=radius {
+            for x_offset in -radius..=radius {
                 let Some(sample_x) = x.checked_add_signed(x_offset) else {
                     continue;
                 };

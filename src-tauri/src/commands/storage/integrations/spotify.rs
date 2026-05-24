@@ -217,7 +217,7 @@ async fn playlist_tracks(state: &AppState, body: Value) -> AppResult<Value> {
         .unwrap_or_default()
         .into_iter()
         .filter_map(|item| item.get("track").cloned().or(Some(item)))
-        .filter_map(|track| map_track_candidate(track))
+        .filter_map(map_track_candidate)
         .collect::<Vec<_>>();
     Ok(json!({
         "tracks": tracks,

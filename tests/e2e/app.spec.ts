@@ -5,8 +5,11 @@ test("app shell renders without a blank page", async ({ page }) => {
   page.on("pageerror", (error) => errors.push(error.message));
 
   await page.goto("/");
-  await expect(page.locator("body")).toBeVisible();
-  await expect(page.locator("#root")).toBeVisible();
+  const mainContent = page.getByRole("main", { name: "Main content" });
+  await expect(mainContent).toBeVisible();
+  await expect(
+    mainContent.getByRole("heading", { name: /Marinara Engine/ }),
+  ).toBeVisible();
 
   expect(errors).toEqual([]);
 });

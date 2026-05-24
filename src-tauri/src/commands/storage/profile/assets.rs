@@ -470,7 +470,7 @@ fn is_legacy_cleanup_backup_asset_path(value: &str) -> bool {
     PROFILE_ASSET_DIRS
         .iter()
         .any(|allowed| normalized == *allowed || normalized.starts_with(&format!("{allowed}/")))
-        && parts.iter().any(|segment| *segment == ".cleanup-backups")
+        && parts.contains(&".cleanup-backups")
 }
 
 pub(super) fn safe_profile_asset_path(value: &str) -> AppResult<PathBuf> {

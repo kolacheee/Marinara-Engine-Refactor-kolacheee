@@ -287,7 +287,7 @@ fn tracker_snapshots_for_target(
         .storage
         .list_where(SNAPSHOT_COLLECTION, &filters)?
         .into_iter()
-        .filter(|row| is_tracker_snapshot(row))
+        .filter(is_tracker_snapshot)
         .filter(|row| non_negative_i64_value(row.get("swipeIndex")) == Some(swipe_index))
         .collect())
 }

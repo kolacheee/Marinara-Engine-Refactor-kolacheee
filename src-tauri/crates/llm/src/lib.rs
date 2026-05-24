@@ -676,7 +676,7 @@ fn build_openai_responses_body(request: &LlmRequest, stream: bool) -> Value {
     {
         if let Some(entries) = extra.as_object() {
             for (key, value) in entries {
-                if !body.get(key).is_some() {
+                if body.get(key).is_none() {
                     body[key] = value.clone();
                 }
             }
@@ -986,7 +986,7 @@ fn apply_openai_parameters(body: &mut Value, request: &LlmRequest) {
     {
         if let Some(entries) = extra.as_object() {
             for (key, value) in entries {
-                if !body.get(key).is_some() {
+                if body.get(key).is_none() {
                     body[key] = value.clone();
                 }
             }

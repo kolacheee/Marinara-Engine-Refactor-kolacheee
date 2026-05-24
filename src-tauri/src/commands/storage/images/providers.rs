@@ -751,8 +751,6 @@ fn openai_images_url(base: &str, endpoint: &str) -> String {
             format!("{}/v1{target_path}", path.trim_end_matches("/api/v1"))
         } else if path.ends_with("/api") {
             format!("{}/v1{target_path}", path.trim_end_matches("/api"))
-        } else if path.ends_with("/v1") {
-            format!("{path}{target_path}")
         } else {
             format!("{path}{target_path}")
         };
@@ -1480,10 +1478,10 @@ async fn generate_automatic1111(
         payload["override_settings"] = json!({ "CLIP_stop_at_last_layers": clip_skip });
     }
     if let Some(model) = model {
-        if !payload
+        if payload
             .get("override_settings")
             .and_then(Value::as_object)
-            .is_some()
+            .is_none()
         {
             payload["override_settings"] = json!({});
         }

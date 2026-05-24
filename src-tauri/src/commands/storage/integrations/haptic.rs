@@ -14,24 +14,13 @@ const MAX_HAPTIC_DURATION_SECONDS: f64 = 30.0;
 
 static HAPTIC: OnceLock<Mutex<HapticRuntime>> = OnceLock::new();
 
+#[derive(Default)]
 struct HapticRuntime {
     client: Option<ButtplugClient>,
     server_url: Option<String>,
     preferred_server_url: Option<String>,
     scanning: bool,
     last_command_at: u128,
-}
-
-impl Default for HapticRuntime {
-    fn default() -> Self {
-        Self {
-            client: None,
-            server_url: None,
-            preferred_server_url: None,
-            scanning: false,
-            last_command_at: 0,
-        }
-    }
 }
 
 pub(crate) async fn haptic_call(rest: &[&str], body: Value) -> AppResult<Value> {

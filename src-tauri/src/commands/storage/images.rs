@@ -187,10 +187,10 @@ pub(crate) async fn generate_image(state: &AppState, body: Value) -> AppResult<V
     let prompt = required_string(&body, "prompt")?;
     let width = image_dimension(&body, "width", 1024);
     let height = image_dimension(&body, "height", 1024);
-    let connection = get_required(state, "connections", &connection_id)?;
+    let connection = get_required(state, "connections", connection_id)?;
     let (base64, mime_type) = generate_image_with_options(
         &connection,
-        &prompt,
+        prompt,
         width,
         height,
         image_generation_options(&body),
@@ -217,14 +217,14 @@ pub(crate) async fn test_image_generation(state: &AppState, id: &str) -> AppResu
             "success": true,
             "base64": base64,
             "mimeType": mime_type,
-            "latencyMs": (now_millis() - start).max(0),
+            "latencyMs": now_millis() - start,
             "prompt": prompt
         })),
         Err(error) => Ok(json!({
             "success": false,
             "base64": Value::Null,
             "mimeType": Value::Null,
-            "latencyMs": (now_millis() - start).max(0),
+            "latencyMs": now_millis() - start,
             "prompt": prompt,
             "error": error.message
         })),

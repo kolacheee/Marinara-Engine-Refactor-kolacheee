@@ -214,10 +214,7 @@ async fn voices(state: &AppState) -> AppResult<Value> {
         .await;
     match response {
         Ok(response) if response.status().is_success() => {
-            let data = response
-                .json::<Value>()
-                .await
-                .unwrap_or_else(|_| Value::Null);
+            let data = response.json::<Value>().await.unwrap_or(Value::Null);
             let parsed = parse_voice_options(&data);
             if parsed.is_empty() {
                 Ok(fallback_voices(source))
@@ -472,13 +469,12 @@ fn voice_options_response(
             item
         })
         .collect::<Vec<_>>();
-    Ok::<Value, AppError>(json!({
+    json!({
         "voices": voices,
         "voiceOptions": options,
         "fromProvider": from_provider,
         "source": source
-    }))
-    .expect("voice response is valid")
+    })
 }
 
 async fn elevenlabs_voices(config: &Value, base: &str) -> AppResult<Value> {
@@ -502,10 +498,7 @@ async fn elevenlabs_voices(config: &Value, base: &str) -> AppResult<Value> {
     if !response.status().is_success() {
         return Ok(fallback_voices("elevenlabs"));
     }
-    let data = response
-        .json::<Value>()
-        .await
-        .unwrap_or_else(|_| Value::Null);
+    let data = response.json::<Value>().await.unwrap_or(Value::Null);
     let parsed = parse_voice_options(&data);
     if parsed.is_empty() {
         Ok(fallback_voices("elevenlabs"))
