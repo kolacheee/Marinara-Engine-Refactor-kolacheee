@@ -388,32 +388,32 @@ flowchart TB
 
         <h2>Engine Layers</h2>
         <pre class="mermaid">
-flowchart BT
-  Contracts[contracts<br/>types, schemas, constants]
-  Core[core<br/>result, IDs, clock, JSON]
-  Capabilities[capabilities<br/>ports only]
-  Shared[shared<br/>pure helpers]
-  Repositories[repositories<br/>capability-backed data access]
-  GenCore[generation-core<br/>prompt, lorebook, regex, LLM DTOs]
-  Agents[agents-runtime<br/>executor, knowledge, pipeline]
-  Generation[generation<br/>lifecycle, replay, makers, prompt review]
-  Mari[mari<br/>Professor Mari entry]
+flowchart TB
   Modes[modes<br/>chat, roleplay, game]
+  Mari[mari<br/>Professor Mari entry]
+  Generation[generation<br/>lifecycle, replay, makers, prompt review]
+  Agents[agents-runtime<br/>executor, knowledge, pipeline]
+  GenCore[generation-core<br/>prompt, lorebook, regex, LLM DTOs]
+  Repositories[repositories<br/>capability-backed data access]
+  Shared[shared<br/>pure helpers]
+  Capabilities[capabilities<br/>ports only]
+  Core[core<br/>result, IDs, clock, JSON]
+  Contracts[contracts<br/>types, schemas, constants]
 
-  Core --> Contracts
-  Capabilities --> Contracts
-  Shared --> Contracts
-  Repositories --> Capabilities
-  Repositories --> Shared
-  GenCore --> Repositories
-  GenCore --> Shared
-  Agents --> GenCore
-  Generation --> Agents
-  Generation --> GenCore
-  Mari --> Contracts
   Modes --> Generation
   Modes --> Repositories
   Modes --> Shared
+  Mari --> Contracts
+  Generation --> Agents
+  Generation --> GenCore
+  Agents --> GenCore
+  GenCore --> Repositories
+  GenCore --> Shared
+  Repositories --> Capabilities
+  Repositories --> Shared
+  Shared --> Contracts
+  Capabilities --> Contracts
+  Core --> Contracts
         </pre>
 
         <table>

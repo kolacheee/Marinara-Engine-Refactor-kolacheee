@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, MessageCircle, Plug, X, BookOpen } from "lucide-react";
-import { useConnections } from "../../../catalog/connections/index";
-import { useCreateChat } from "../../../catalog/chats/index";
-import { useChatPresets, useApplyChatPreset } from "../../../catalog/chat-presets/index";
-import { useChatStore } from "../../../../shared/stores/chat.store";
-import { useUIStore } from "../../../../shared/stores/ui.store";
-import { filterLanguageGenerationConnections } from "../../../../shared/lib/connection-filters";
-import { cn } from "../../../../shared/lib/utils";
+import { BookOpen, Loader2, MessageCircle, Plug, X } from "lucide-react";
+import { useCreateChat } from "../../../../catalog/chats/index";
+import { useApplyChatPreset, useChatPresets } from "../../../../catalog/chat-presets/index";
+import { useConnections } from "../../../../catalog/connections/index";
+import { filterLanguageGenerationConnections } from "../../../../../shared/lib/connection-filters";
+import { cn } from "../../../../../shared/lib/utils";
+import { useChatStore } from "../../../../../shared/stores/chat.store";
+import { useUIStore } from "../../../../../shared/stores/ui.store";
 
 type Mode = "conversation" | "roleplay" | "game";
 
@@ -26,7 +26,7 @@ export function NewChatConnectionGate({ mode, onClose }: NewChatConnectionGatePr
   const createChat = useCreateChat();
   const { data: chatPresetsData } = useChatPresets();
   const applyChatPreset = useApplyChatPreset();
-  const openRightPanel = useUIStore((s) => s.openRightPanel);
+  const openRightPanel = useUIStore((state) => state.openRightPanel);
   const [connectionId, setConnectionId] = useState<string>("");
 
   const connectionRows = useMemo(
@@ -51,7 +51,7 @@ export function NewChatConnectionGate({ mode, onClose }: NewChatConnectionGatePr
     const presets = chatPresetsData ?? [];
     const presetMode = mode === "conversation" || mode === "roleplay" ? mode : null;
     const starred = presetMode
-      ? (presets.find((p) => p.mode === presetMode && p.isActive && !p.isDefault) ?? null)
+      ? (presets.find((preset) => preset.mode === presetMode && preset.isActive && !preset.isDefault) ?? null)
       : null;
     createChat.mutate(
       {
@@ -69,7 +69,7 @@ export function NewChatConnectionGate({ mode, onClose }: NewChatConnectionGatePr
             try {
               await applyChatPreset.mutateAsync({ presetId: starred.id, chatId: chat.id });
             } catch {
-              /* non-fatal — chat still opens with system defaults */
+              /* non-fatal - chat still opens with system defaults */
             }
           }
           store.setShouldOpenSettings(true, chat.id);
@@ -134,11 +134,11 @@ export function NewChatConnectionGate({ mode, onClose }: NewChatConnectionGatePr
                 </label>
                 <select
                   value={connectionId}
-                  onChange={(e) => setConnectionId(e.target.value)}
+                  onChange={(event) => setConnectionId(event.target.value)}
                   disabled={createChat.isPending}
                   className="w-full rounded-lg bg-[var(--secondary)] px-3 py-2.5 text-xs outline-none ring-1 ring-[var(--border)] transition-shadow focus:ring-[var(--primary)]/40"
                 >
-                  <option value="">Select a connection…</option>
+                  <option value="">Select a connection...</option>
                   {connectionRows.map((connection) => (
                     <option key={connection.id} value={connection.id}>
                       {connection.name}
