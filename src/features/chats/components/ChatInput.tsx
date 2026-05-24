@@ -21,7 +21,7 @@ import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { useGenerate } from "../../generation/hooks/use-generate";
-import { useApplyRegex } from "../../agents/hooks/use-apply-regex";
+import { useApplyRegex } from "../../agents/regex-application";
 import { useCreateMessage, useDeleteMessage, useUpdateMessageExtra, chatKeys } from "../../chats/hooks/use-chats";
 import { characterKeys } from "../../characters/hooks/use-characters";
 import type { Message } from "../../../engine/contracts/types/chat";

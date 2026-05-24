@@ -8,7 +8,7 @@ import { appendChatSummaryEntryToMetadata } from "../../../engine/shared/text/ch
 import { llmApi } from "../../../shared/api/llm-api";
 import { storageApi } from "../../../shared/api/storage-api";
 import { invokeTauri } from "../../../shared/api/tauri-client";
-import { registerChatSwitchHandler, useChatStore } from "../../../shared/stores/chat.store";
+import { useChatStore } from "../../../shared/stores/chat.store";
 import { useAgentStore } from "../../../shared/stores/agent.store";
 import { useGameStateStore } from "../../world-state/stores/world-state.store";
 import { useEncounterStore } from "../../../shared/stores/encounter.store";
@@ -29,10 +29,6 @@ export const chatKeys = {
 };
 
 const RECENT_MESSAGE_CONTENT_EDIT_TTL_MS = 5 * 60 * 1000;
-
-registerChatSwitchHandler(() => {
-  useGameStateStore.getState().setGameState(null);
-});
 
 interface RecentMessageContentEdit {
   chatId: string;

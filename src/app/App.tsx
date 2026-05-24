@@ -7,6 +7,7 @@ import { AppDialogRenderer } from "../shared/components/ui/AppDialogRenderer";
 import { fontsApi } from "../shared/api/settings-assets-api";
 import { filePathToAssetUrl } from "../shared/api/local-file-api";
 import { useUIStore } from "../shared/stores/ui.store";
+import { useChatSwitchEffects } from "./startup/chat-switch-effects";
 import { installRangeSliderSync } from "./startup/range-slider-sync";
 
 function stripFontFamilyQuotes(family: string): string {
@@ -42,6 +43,8 @@ export function App() {
   const language = useUIStore((s) => s.language);
   const visualTheme = useUIStore((s) => s.visualTheme);
   const fontFamily = useUIStore((s) => s.fontFamily);
+
+  useChatSwitchEffects();
 
   useEffect(() => installRangeSliderSync(), []);
 

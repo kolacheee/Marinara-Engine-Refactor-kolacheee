@@ -46,7 +46,7 @@ import { formatNarration } from "../lib/game-narration-format";
 import type { SpriteInfo } from "../../characters/hooks/use-characters";
 import { useTranslate } from "../../../shared/hooks/use-translate";
 import { useTTSConfig } from "../../../shared/hooks/use-tts";
-import { useApplyRegex } from "../../agents/hooks/use-apply-regex";
+import { useApplyRegex } from "../../agents/regex-application";
 import { useGameAssetStore } from "../stores/game-asset.store";
 import { useGameModeStore } from "../stores/game-mode.store";
 import { useUIStore } from "../../../shared/stores/ui.store";

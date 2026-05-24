@@ -38,7 +38,7 @@ import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { chatKeys } from "../../chats/hooks/use-chats";
 import { useShallow } from "zustand/react/shallow";
 import { createMessageMacroResolver } from "../../../shared/lib/chat-macros";
-import { useApplyRegex } from "../../agents/hooks/use-apply-regex";
+import { useApplyRegex } from "../../agents/regex-application";
 import { useUIStore } from "../../../shared/stores/ui.store";
 import { useChatStore } from "../../../shared/stores/chat.store";
 import { useTranslate } from "../../../shared/hooks/use-translate";
