@@ -706,7 +706,7 @@ export function ChatRoleplaySurface({
 
   return (
     <div data-component="ChatArea.Roleplay" className="flex flex-1 overflow-hidden">
-      <div className="rpg-chat-area mari-chat-area relative flex flex-1 flex-col overflow-hidden">
+      <div className="rpg-chat-area mari-chat-area mari-card-css relative flex flex-1 flex-col overflow-hidden" data-chat-mode="roleplay" style={{ isolation: "isolate" }}>
         <CrossfadeBackground url={chatBackground} />
         <div className="rpg-overlay absolute inset-0" />
         <div className="rpg-vignette pointer-events-none absolute inset-0" />

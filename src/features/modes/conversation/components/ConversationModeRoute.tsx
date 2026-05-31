@@ -13,6 +13,7 @@ import {
   useSpriteMetadataState,
 } from "../../shared/chat-ui/index";
 import { ChatConversationSurface } from "./ChatConversationSurface";
+import { CreatorNotesCssInjector } from "../../shared/chat-ui/components/CreatorNotesCssInjector";
 
 type ConversationModeRouteProps = {
   activeChatId: string;
@@ -93,8 +94,19 @@ export function ConversationModeRoute({ activeChatId }: ConversationModeRoutePro
         }
       : undefined;
 
+  const cardCssMode = (() => {
+    const mode = data.chatMeta.cardCssMode;
+    if (mode === "disabled" || mode === "exclusive") return mode;
+    return "chat" as const;
+  })();
+
   return (
     <>
+      <CreatorNotesCssInjector
+        characters={data.allCharacters}
+        chatCharacterIds={data.chatCharIds}
+        mode={cardCssMode}
+      />
       <ChatConversationSurface
         activeChatId={activeChatId}
         chat={data.chat}

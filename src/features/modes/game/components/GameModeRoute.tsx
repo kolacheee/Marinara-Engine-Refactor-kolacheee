@@ -9,6 +9,7 @@ import {
   useSpriteMetadataState,
 } from "../../shared/chat-ui/index";
 import { GameSurface } from "./GameSurface";
+import { CreatorNotesCssInjector } from "../../shared/chat-ui/components/CreatorNotesCssInjector";
 
 type GameModeRouteProps = {
   activeChatId: string;
@@ -44,8 +45,19 @@ export function GameModeRoute({ activeChatId }: GameModeRouteProps) {
 
   if (!data.chat) return <div className="flex flex-1 overflow-hidden" />;
 
+  const cardCssMode = (() => {
+    const mode = data.chatMeta.cardCssMode;
+    if (mode === "disabled" || mode === "exclusive") return mode;
+    return "chat" as const;
+  })();
+
   return (
     <>
+      <CreatorNotesCssInjector
+        characters={data.allCharacters}
+        chatCharacterIds={data.chatCharIds}
+        mode={cardCssMode}
+      />
       <GameSurface
         activeChatId={activeChatId}
         chat={data.chat as unknown as EngineChat}
