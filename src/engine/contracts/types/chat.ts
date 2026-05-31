@@ -331,6 +331,10 @@ export interface ChatMetadata {
   /** How creator-notes CSS is applied: "disabled" | "exclusive" | "chat" (default). */
   cardCssMode?: "disabled" | "exclusive" | "chat";
 
+  // ── Scoped Regex Scripts ──
+  /** How character-scoped regex scripts are applied: "disabled" | "exclusive" (default) | "chat". */
+  scopedRegexMode?: "disabled" | "exclusive" | "chat";
+
   /** Any extra key-value data */
   [key: string]: unknown;
 }
