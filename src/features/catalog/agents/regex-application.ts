@@ -4,7 +4,11 @@ import { useRegexScripts, type RegexScriptRow } from "./hooks/use-regex-scripts"
 
 type RegexPlacement = "ai_output" | "user_input";
 
-interface ApplyRegexOptions {
+export type ScopedRegexMode = "disabled" | "exclusive" | "chat";
+
+interface RegexApplyOptions {
+  scopedMode?: ScopedRegexMode;
+  characterId?: string;
   depth?: number;
   resolveMacros?: (value: string) => string;
 }
@@ -36,7 +40,19 @@ function parseScript(row: RegexScriptRow): ParsedRegexScript {
   };
 }
 
-function resolveText(value: string, options?: ApplyRegexOptions): string {
+function filterForMode(
+  scripts: ParsedRegexScript[],
+  mode: ScopedRegexMode,
+  characterId: string | undefined,
+): ParsedRegexScript[] {
+  if (mode === "disabled") return scripts.filter((s) => !s.characterId);
+  if (mode === "chat") return scripts;
+  // "exclusive": global + only the owning character's scripts
+  if (!characterId) return scripts.filter((s) => !s.characterId);
+  return scripts.filter((s) => !s.characterId || s.characterId === characterId);
+}
+
+function resolveText(value: string, options?: RegexApplyOptions): string {
   return options?.resolveMacros ? options.resolveMacros(value) : value;
 }
 
@@ -44,7 +60,7 @@ function applyScripts(
   text: string,
   scripts: ParsedRegexScript[],
   placement: RegexPlacement,
-  options?: ApplyRegexOptions & { promptOnly?: boolean },
+  options?: RegexApplyOptions & { promptOnly?: boolean },
 ): string {
   let result = text;
   for (const script of scripts) {
@@ -72,21 +88,42 @@ function applyScripts(
   return result;
 }
 
-export function useApplyRegex() {
-  const { data: regexScripts } = useRegexScripts();
+/**
+ * Hook that provides functions to apply regex transformations.
+ *
+ * Scoped regex modes control how character-scoped scripts are applied:
+ * - `disabled` — scoped scripts are ignored; only global scripts run.
+ * - `exclusive` (default) — scoped scripts only apply to their owning character's messages.
+ * - `chat` — all scoped scripts apply to every message, including user input.
+ */
+export function useApplyRegex(characterIds?: string[]) {
+  const { data: regexScripts } = useRegexScripts(characterIds);
   const scripts = useMemo(() => (regexScripts ?? []).map(parseScript), [regexScripts]);
 
   const applyToAIOutput = useCallback(
-    (text: string, options?: ApplyRegexOptions) => applyScripts(text, scripts, "ai_output", options),
+    (text: string, options?: RegexApplyOptions) => {
+      const mode = options?.scopedMode ?? "exclusive";
+      const filtered = filterForMode(scripts, mode, options?.characterId);
+      return applyScripts(text, filtered, "ai_output", options);
+    },
     [scripts],
   );
+
   const applyToUserInput = useCallback(
-    (text: string, options?: ApplyRegexOptions) => applyScripts(text, scripts, "user_input", options),
+    (text: string, options?: RegexApplyOptions) => {
+      const mode = options?.scopedMode ?? "exclusive";
+      const filtered = filterForMode(scripts, mode, options?.characterId);
+      return applyScripts(text, filtered, "user_input", options);
+    },
     [scripts],
   );
+
   const applyPromptOnly = useCallback(
-    (text: string, placement: RegexPlacement, options?: ApplyRegexOptions) =>
-      applyScripts(text, scripts, placement, { ...options, promptOnly: true }),
+    (text: string, placement: RegexPlacement, options?: RegexApplyOptions) => {
+      const mode = options?.scopedMode ?? "exclusive";
+      const filtered = filterForMode(scripts, mode, options?.characterId);
+      return applyScripts(text, filtered, placement, { ...options, promptOnly: true });
+    },
     [scripts],
   );
 

@@ -47,6 +47,7 @@ import type { SpriteInfo } from "../../../catalog/characters/index";
 import { useTranslate } from "../../../../shared/hooks/use-translate";
 import { useTTSConfig } from "../../../../shared/hooks/use-tts";
 import { useApplyRegex } from "../../../catalog/agents/regex-application";
+import { useChatStore } from "../../../../shared/stores/chat.store";
 import { useGameAssetStore } from "../stores/game-asset.store";
 import { useGameModeStore } from "../stores/game-mode.store";
 import { useUIStore } from "../../../../shared/stores/ui.store";
@@ -921,7 +922,14 @@ export function GameNarration({
   onMaxNavOffsetChange,
 }: GameNarrationProps) {
   const { translations, translating } = useTranslate();
-  const { applyToAIOutput } = useApplyRegex();
+  const { applyToAIOutput } = useApplyRegex(activeCharacterIds);
+  const scopedRegexMode = useChatStore((s) => {
+    const meta = s.activeChat?.metadata;
+    if (!meta) return "exclusive" as const;
+    const parsed = typeof meta === "string" ? (() => { try { return JSON.parse(meta); } catch { return {}; } })() : meta;
+    const mode = parsed?.scopedRegexMode;
+    return mode === "disabled" || mode === "chat" ? mode : ("exclusive" as const);
+  });
   const [activeIndex, setActiveIndex] = useState(0);
   const [visibleChars, setVisibleChars] = useState(0);
   const [logsOpen, setLogsOpen] = useState(false);
@@ -1300,11 +1308,13 @@ export function GameNarration({
     ) => {
       if (sourceRole !== "assistant" && sourceRole !== "narrator") return text;
       return applyToAIOutput(text, {
+        scopedMode: scopedRegexMode,
+        characterId: sourceMessageId ? (sourceMessagesById.get(sourceMessageId)?.characterId ?? undefined) : undefined,
         depth: sourceMessageId ? messageDepthById.get(sourceMessageId) : undefined,
         resolveMacros: resolveMacrosForText,
       });
     },
-    [applyToAIOutput, messageDepthById],
+    [applyToAIOutput, messageDepthById, scopedRegexMode, sourceMessagesById],
   );
 
   const prepareSegmentText = useCallback(
