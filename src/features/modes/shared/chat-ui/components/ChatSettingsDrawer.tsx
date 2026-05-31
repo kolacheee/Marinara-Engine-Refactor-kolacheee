@@ -622,7 +622,7 @@ export function ChatSettingsDrawer({
   const updateRegexScript = useUpdateRegexScript();
   const { data: allRegexScripts } = useRegexScripts(chatCharIds);
   const scopedRegexScripts = useMemo(
-    () => (allRegexScripts ?? []).filter((s) => s.characterId !== null),
+    () => (allRegexScripts ?? []).filter((s) => !!s.characterId),
     [allRegexScripts],
   );
 

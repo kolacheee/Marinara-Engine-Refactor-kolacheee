@@ -45,11 +45,11 @@ function filterForMode(
   mode: ScopedRegexMode,
   characterId: string | undefined,
 ): ParsedRegexScript[] {
-  if (mode === "disabled") return scripts.filter((s) => s.characterId === null);
+  if (mode === "disabled") return scripts.filter((s) => !s.characterId);
   if (mode === "chat") return scripts;
   // "exclusive": global + only the owning character's scripts
-  if (!characterId) return scripts.filter((s) => s.characterId === null);
-  return scripts.filter((s) => s.characterId === null || s.characterId === characterId);
+  if (!characterId) return scripts.filter((s) => !s.characterId);
+  return scripts.filter((s) => !s.characterId || s.characterId === characterId);
 }
 
 function resolveText(value: string, options?: RegexApplyOptions): string {
