@@ -101,6 +101,7 @@ export function sanitizeChatCss(css: string): string {
       .replace(/position\s*:\s*fixed/gi, "position: absolute")
       .replace(/<\/style/gi, "<\\/style")
       .replace(THEME_TOKEN_RE, "/* [blocked] */")
+      .replace(/!important/gi, "")
       .trim()
   );
 }

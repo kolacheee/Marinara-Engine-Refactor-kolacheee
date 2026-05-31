@@ -73,7 +73,7 @@ export function CreatorNotesCssInjector({
       style.id = STYLE_ELEMENT_ID;
       document.head.appendChild(style);
     }
-    style.textContent = scopedCss;
+    style.textContent = `@layer card-css {\n${scopedCss}\n}`;
 
     return () => {
       style?.remove();
