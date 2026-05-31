@@ -327,6 +327,10 @@ export interface ChatMetadata {
    */
   summaryTailMessages?: number;
 
+  // ── Scoped Regex Scripts ──
+  /** How character-scoped regex scripts are applied: "disabled" | "exclusive" (default) | "chat". */
+  scopedRegexMode?: "disabled" | "exclusive" | "chat";
+
   /** Any extra key-value data */
   [key: string]: unknown;
 }
